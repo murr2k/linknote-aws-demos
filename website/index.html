@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linknote - AWS Cloud Demonstrations</title>
+    <meta name="description" content="AWS cloud architecture demonstrations by Murray Kopit - showcasing S3, CloudFront, Certificate Manager, and more">
+    <meta name="author" content="Murray Kopit">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 60px 0;
+            color: white;
+        }
+        
+        .logo {
+            font-size: 3.5em;
+            font-weight: 300;
+            margin-bottom: 20px;
+        }
+        
+        .tagline {
+            font-size: 1.3em;
+            opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto 20px;
+        }
+        
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.8;
+            margin-bottom: 40px;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 50px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+        }
+        
+        .cta-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .features {
+            background: white;
+            padding: 80px 0;
+            margin-top: 60px;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+            margin-top: 60px;
+        }
+        
+        .feature {
+            text-align: center;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .feature-icon {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+        
+        .feature h3 {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .feature p {
+            color: #666;
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .section-subtitle {
+            text-align: center;
+            font-size: 1.2em;
+            color: #666;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        footer {
+            background: #333;
+            color: white;
+            text-align: center;
+            padding: 40px 0;
+            margin-top: 80px;
+        }
+        
+        .status {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+        
+        @media (max-width: 768px) {
+            .logo {
+                font-size: 2.5em;
+            }
+            
+            .features-grid {
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+            
+            header {
+                padding: 40px 0;
+            }
+            
+            .features {
+                padding: 60px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="status">☁️ Powered by AWS</div>
+            <h1 class="logo">Linknote</h1>
+            <p class="tagline">AWS Cloud Architecture Demonstrations</p>
+            <p class="subtitle">By Murray Kopit</p>
+        </div>
+    </header>
+    
+    <section class="features">
+        <div class="container">
+            <h2 class="section-title">AWS Services Demonstrated</h2>
+            <p class="section-subtitle">This site showcases real AWS cloud architecture and services in production.</p>
+            
+            <div class="features-grid">
+                <div class="feature">
+                    <div class="feature-icon">🗄️</div>
+                    <h3>Amazon S3</h3>
+                    <p>Static website hosting with public access policies and cross-origin resource sharing configuration.</p>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-icon">🌐</div>
+                    <h3>CloudFront CDN</h3>
+                    <p>Global content delivery network with custom SSL certificates and HTTP to HTTPS redirection.</p>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-icon">🔐</div>
+                    <h3>Certificate Manager</h3>
+                    <p>Free SSL/TLS certificates with automatic DNS validation and renewal management.</p>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-icon">⚙️</div>
+                    <h3>AWS CLI & APIs</h3>
+                    <p>Programmatic resource management using AWS CLI, IAM policies, and Infrastructure as Code.</p>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-icon">💰</div>
+                    <h3>Cost Management</h3>
+                    <p>Budget alerts, cost monitoring, and free tier protection with automated email notifications.</p>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Secrets Manager</h3>
+                    <p>Centralized storage of API keys, passwords, and certificates with automatic rotation and encryption.</p>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-icon">🚀</div>
+                    <h3>More Coming Soon</h3>
+                    <p>Lambda functions, API Gateway, DynamoDB, and other AWS services will be added as demonstrations expand.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Murray Kopit - AWS Cloud Architecture Demonstrations</p>
+            <p>Built with ☁️ Amazon Web Services</p>
+        </div>
+    </footer>
+</body>
+</html>
