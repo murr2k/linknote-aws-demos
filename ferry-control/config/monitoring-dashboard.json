@@ -1,0 +1,523 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "BC Ferries Maritime Operations Monitor - ops.linknote.com",
+    "tags": ["bc-ferries", "maritime-ops", "monitoring", "telemetry"],
+    "timezone": "America/Vancouver", 
+    "refresh": "5s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "variables": [
+      {
+        "name": "vessel",
+        "type": "query",
+        "query": "label_values(ferry_telemetry, vessel_id)",
+        "current": {
+          "value": "001",
+          "text": "Island Class Vessel 001"
+        }
+      }
+    ],
+    "panels": [
+      {
+        "title": "🚢 BC Ferries Operations Center - Maritime Telemetry Monitor",
+        "type": "text",
+        "gridPos": {"h": 3, "w": 24, "x": 0, "y": 0},
+        "options": {
+          "content": "# BC Ferries Island Class Vessel Operations Monitor\n\n**Live Telemetry Dashboard** | **Current Route**: Vancouver Harbor → Swartz Bay  \n**Vessel**: Island Class 001 | **Status**: ✅ Operational | **Last Update**: {{__from}} to {{__to}}  \n\n🎛️ **Control Dashboard**: [ferry.linknote.com](https://ferry.linknote.com) | 📊 **Monitoring Dashboard**: ops.linknote.com",
+          "mode": "markdown"
+        }
+      },
+      {
+        "title": "🔧 Engine Performance Monitoring",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 3},
+        "collapsed": false,
+        "panels": [
+          {
+            "title": "Engine RPM - Real-time",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 8, "x": 0, "y": 4},
+            "targets": [
+              {
+                "datasource": "AWS CloudWatch",
+                "region": "us-west-2",
+                "namespace": "Custom/FerryTelemetry",
+                "metricName": "EngineRPM",
+                "dimensions": {
+                  "VesselID": "$vessel"
+                },
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 1400},
+                    {"color": "orange", "value": 1600}, 
+                    {"color": "red", "value": 1800}
+                  ]
+                },
+                "unit": "rpm",
+                "min": 0,
+                "max": 2000
+              }
+            },
+            "options": {
+              "legend": {"displayMode": "list", "placement": "bottom"},
+              "tooltip": {"mode": "single"}
+            }
+          },
+          {
+            "title": "Engine Temperature Trend",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 8, "x": 8, "y": 4},
+            "targets": [
+              {
+                "datasource": "AWS CloudWatch",
+                "namespace": "Custom/FerryTelemetry",
+                "metricName": "EngineTemperature",
+                "dimensions": {
+                  "VesselID": "$vessel"
+                },
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 90},
+                    {"color": "red", "value": 100}
+                  ]
+                },
+                "unit": "celsius"
+              }
+            },
+            "alert": {
+              "name": "High Engine Temperature",
+              "conditions": [
+                {
+                  "query": {"refId": "A"},
+                  "reducer": {"type": "last"},
+                  "evaluator": {"params": [105], "type": "gt"}
+                }
+              ],
+              "frequency": "10s",
+              "notifications": [
+                {
+                  "type": "email",
+                  "addresses": ["ops@bcferries.com"]
+                }
+              ]
+            }
+          },
+          {
+            "title": "Fuel Flow Rate",
+            "type": "gauge",
+            "gridPos": {"h": 8, "w": 8, "x": 16, "y": 4},
+            "targets": [
+              {
+                "datasource": "AWS CloudWatch",
+                "namespace": "Custom/FerryTelemetry",
+                "metricName": "FuelFlowRate",
+                "dimensions": {
+                  "VesselID": "$vessel"
+                },
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 150},
+                    {"color": "red", "value": 180}
+                  ]
+                },
+                "unit": "L/h",
+                "min": 0,
+                "max": 200
+              }
+            }
+          }
+        ]
+      },
+      {
+        "title": "⚡ Power Systems Status",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 12},
+        "collapsed": false,
+        "panels": [
+          {
+            "title": "Battery State of Charge",
+            "type": "gauge",
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 13},
+            "targets": [
+              {
+                "datasource": "HiveMQ MQTT",
+                "topic": "ferry/vessel/001/telemetry/power",
+                "jsonPath": "$.batterySOC",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": null},
+                    {"color": "yellow", "value": 25},
+                    {"color": "green", "value": 60}
+                  ]
+                },
+                "unit": "percent",
+                "min": 0,
+                "max": 100
+              }
+            },
+            "alert": {
+              "name": "Low Battery Warning",
+              "conditions": [
+                {
+                  "query": {"refId": "A"},
+                  "reducer": {"type": "last"},
+                  "evaluator": {"params": [25], "type": "lt"}
+                }
+              ],
+              "frequency": "30s"
+            }
+          },
+          {
+            "title": "Power Mode Timeline",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 9, "x": 6, "y": 13},
+            "targets": [
+              {
+                "datasource": "AWS TimeStream",
+                "database": "FerryTelemetryDB",
+                "table": "VesselTelemetry",
+                "query": "SELECT time, power_mode FROM $database.$table WHERE vessel_id = '$vessel' AND time >= ago(1h)",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "palette-classic"},
+                "custom": {
+                  "drawStyle": "line",
+                  "lineInterpolation": "stepAfter"
+                }
+              }
+            },
+            "options": {
+              "legend": {"displayMode": "table"}
+            }
+          },
+          {
+            "title": "Generator Load",
+            "type": "stat",
+            "gridPos": {"h": 8, "w": 9, "x": 15, "y": 13},
+            "targets": [
+              {
+                "datasource": "AWS IoT Core Telemetry",
+                "topic": "ferry/vessel/001/telemetry/power",
+                "jsonPath": "$.generatorLoad",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 80},
+                    {"color": "red", "value": 90}
+                  ]
+                },
+                "unit": "percent"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "title": "🚨 Safety Systems Monitor",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 21},
+        "collapsed": false,
+        "panels": [
+          {
+            "title": "Fire Alarm Status",
+            "type": "stat",
+            "gridPos": {"h": 6, "w": 8, "x": 0, "y": 22},
+            "targets": [
+              {
+                "datasource": "HiveMQ MQTT",
+                "topic": "ferry/vessel/001/telemetry/safety",
+                "jsonPath": "$.fireAlarmStatus",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "value"},
+                "mappings": [
+                  {"options": {"normal": {"color": "green", "text": "🟢 NORMAL"}}, "type": "value"},
+                  {"options": {"alarm": {"color": "red", "text": "🚨 FIRE ALARM"}}, "type": "value"},
+                  {"options": {"fault": {"color": "orange", "text": "⚠️ SYSTEM FAULT"}}, "type": "value"}
+                ]
+              }
+            },
+            "alert": {
+              "name": "Fire Alarm Emergency",
+              "conditions": [
+                {
+                  "query": {"refId": "A"},
+                  "reducer": {"type": "last"},
+                  "evaluator": {"params": ["alarm"], "type": "eq"}
+                }
+              ],
+              "frequency": "5s",
+              "notifications": [
+                {
+                  "type": "pagerduty",
+                  "severity": "critical"
+                }
+              ]
+            }
+          },
+          {
+            "title": "Bilge Water Level",
+            "type": "gauge",
+            "gridPos": {"h": 6, "w": 8, "x": 8, "y": 22},
+            "targets": [
+              {
+                "datasource": "AWS IoT Core Telemetry",
+                "topic": "ferry/vessel/001/telemetry/safety",
+                "jsonPath": "$.bilgeLevel",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 40},
+                    {"color": "red", "value": 70}
+                  ]
+                },
+                "unit": "percent",
+                "min": 0,
+                "max": 100
+              }
+            }
+          },
+          {
+            "title": "CO₂ Levels",
+            "type": "timeseries",
+            "gridPos": {"h": 6, "w": 8, "x": 16, "y": 22},
+            "targets": [
+              {
+                "datasource": "AWS CloudWatch",
+                "namespace": "Custom/FerryTelemetry",
+                "metricName": "CO2Levels",
+                "dimensions": {
+                  "VesselID": "$vessel",
+                  "Location": "EngineRoom"
+                },
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 1000},
+                    {"color": "red", "value": 5000}
+                  ]
+                },
+                "unit": "ppm"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "title": "🧭 Navigation & Location",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 28},
+        "collapsed": false,
+        "panels": [
+          {
+            "title": "Vessel Speed",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 29},
+            "targets": [
+              {
+                "datasource": "AWS TimeStream",
+                "query": "SELECT time, speed FROM FerryTelemetryDB.NavigationData WHERE vessel_id = '$vessel' AND time >= ago(1h)",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "palette-classic"},
+                "unit": "knots",
+                "min": 0,
+                "max": 25
+              }
+            }
+          },
+          {
+            "title": "Current Heading",
+            "type": "gauge",
+            "gridPos": {"h": 8, "w": 6, "x": 6, "y": 29},
+            "targets": [
+              {
+                "datasource": "HiveMQ MQTT",
+                "topic": "ferry/vessel/001/telemetry/navigation",
+                "jsonPath": "$.heading",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "degrees",
+                "min": 0,
+                "max": 360,
+                "color": {"mode": "continuous-GrYlRd"}
+              }
+            }
+          },
+          {
+            "title": "Route Map - Vancouver Harbor to Swartz Bay",
+            "type": "geomap",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 29},
+            "targets": [
+              {
+                "datasource": "AWS TimeStream",
+                "query": "SELECT time, latitude, longitude FROM FerryTelemetryDB.NavigationData WHERE vessel_id = '$vessel' AND time >= ago(1h)",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "view": {
+                "id": "zero",
+                "lat": 49.0,
+                "lon": -123.3,
+                "zoom": 9
+              },
+              "layers": [
+                {
+                  "type": "route",
+                  "config": {
+                    "style": {
+                      "color": {
+                        "fixed": "blue"
+                      },
+                      "size": {
+                        "fixed": 3
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "title": "📊 System Health Overview",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 37},
+        "collapsed": false,
+        "panels": [
+          {
+            "title": "Alert Summary",
+            "type": "alertlist",
+            "gridPos": {"h": 6, "w": 12, "x": 0, "y": 38},
+            "options": {
+              "showOptions": "current",
+              "maxItems": 10,
+              "sortOrder": "severity",
+              "dashboardAlerts": true,
+              "alertName": "",
+              "dashboardTitle": "",
+              "folderId": null,
+              "tags": ["bc-ferries"]
+            }
+          },
+          {
+            "title": "Data Source Status",
+            "type": "table",
+            "gridPos": {"h": 6, "w": 12, "x": 12, "y": 38},
+            "targets": [
+              {
+                "datasource": "Grafana",
+                "queryType": "datasource",
+                "refId": "A"
+              }
+            ],
+            "transformations": [
+              {
+                "id": "organize",
+                "options": {
+                  "excludeByName": {},
+                  "indexByName": {},
+                  "renameByName": {
+                    "name": "Data Source",
+                    "health": "Status",
+                    "updated": "Last Update"
+                  }
+                }
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "custom": {
+                  "align": "auto",
+                  "cellOptions": {
+                    "type": "auto"
+                  },
+                  "inspect": false
+                },
+                "mappings": [
+                  {
+                    "options": {
+                      "ok": {
+                        "color": "green",
+                        "index": 0,
+                        "text": "✅ Connected"
+                      },
+                      "error": {
+                        "color": "red",
+                        "index": 1,
+                        "text": "❌ Error"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

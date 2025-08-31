@@ -1,0 +1,210 @@
+apiVersion: 1
+
+# BC Ferries Maritime Operations Data Sources Configuration
+# For Grafana Cloud monitoring at ops.linknote.com
+
+datasources:
+  # AWS IoT Core - Real-time telemetry data
+  - name: AWS IoT Core Telemetry
+    type: mqtt
+    access: proxy
+    url: mqtts://YOUR_IOT_ENDPOINT.iot.us-west-2.amazonaws.com:8883
+    isDefault: false
+    jsonData:
+      clientId: ferry-monitoring-client
+      keepAlive: 60
+      cleanSession: true
+      timeout: 30
+      subscriptions:
+        - topic: ferry/vessel/001/telemetry/engine
+          qos: 1
+        - topic: ferry/vessel/001/telemetry/power  
+          qos: 1
+        - topic: ferry/vessel/001/telemetry/safety
+          qos: 1
+        - topic: ferry/vessel/001/telemetry/navigation
+          qos: 1
+        - topic: ferry/vessel/001/alerts/+
+          qos: 2
+    secureJsonData:
+      username: ferry-monitoring
+      password: ${IOT_DEVICE_PASSWORD}
+      clientCert: ${IOT_CLIENT_CERT}
+      clientKey: ${IOT_CLIENT_KEY}
+      caCert: ${IOT_CA_CERT}
+
+  # HiveMQ Cloud - MQTT message broker
+  - name: HiveMQ Cloud MQTT
+    type: mqtt
+    access: proxy 
+    url: mqtts://YOUR_HIVEMQ_CLUSTER.s2.eu.hivemq.cloud:8883
+    isDefault: false
+    jsonData:
+      clientId: grafana-ferry-monitor
+      keepAlive: 60
+      cleanSession: false
+      timeout: 30
+      subscriptions:
+        - topic: bcferries/vessel/001/+/+
+          qos: 1
+        - topic: bcferries/emergency/+
+          qos: 2
+        - topic: bcferries/status/+
+          qos: 0
+    secureJsonData:
+      username: ${HIVEMQ_USERNAME}
+      password: ${HIVEMQ_PASSWORD}
+
+  # AWS CloudWatch - Infrastructure metrics and logs
+  - name: AWS CloudWatch
+    type: cloudwatch
+    access: proxy
+    isDefault: true
+    jsonData:
+      authType: keys
+      defaultRegion: us-west-2
+      customMetricsNamespaces: Custom/FerryTelemetry,AWS/IoT,AWS/Lambda
+      dynamicLabels: true
+    secureJsonData:
+      accessKey: ${AWS_ACCESS_KEY_ID}
+      secretKey: ${AWS_SECRET_ACCESS_KEY}
+
+  # AWS TimeStream - Time-series database for historical data
+  - name: AWS TimeStream
+    type: grafana-timestream-datasource
+    access: proxy
+    isDefault: false
+    jsonData:
+      authType: keys
+      defaultRegion: us-west-2
+      database: FerryTelemetryDB
+      defaultTable: VesselTelemetry
+    secureJsonData:
+      accessKey: ${AWS_ACCESS_KEY_ID}
+      secretKey: ${AWS_SECRET_ACCESS_KEY}
+
+  # Prometheus - Application metrics (if using Prometheus exporter)
+  - name: Ferry Metrics
+    type: prometheus
+    access: proxy
+    url: http://ferry.linknote.com:9090
+    isDefault: false
+    jsonData:
+      httpMethod: GET
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: 2.40.0
+      cacheLevel: High
+      disableMetricsLookup: false
+      customQueryParameters: ""
+      
+  # InfluxDB - Alternative time-series storage
+  - name: Ferry InfluxDB
+    type: influxdb
+    access: proxy
+    url: http://influxdb.ferry.linknote.com:8086
+    isDefault: false
+    database: ferry_telemetry
+    jsonData:
+      version: "2.0"
+      organization: bc-ferries
+      defaultBucket: vessel-data
+      tlsSkipVerify: false
+    secureJsonData:
+      token: ${INFLUXDB_TOKEN}
+
+  # Loki - Log aggregation
+  - name: Ferry Logs
+    type: loki
+    access: proxy
+    url: http://loki.ferry.linknote.com:3100
+    isDefault: false
+    jsonData:
+      derivedFields:
+        - datasourceUid: Ferry Metrics
+          matcherRegex: "vessel_id=(\\w+)"
+          name: vessel_metrics
+          url: "/explore?orgId=1&left=%5B%22now-1h%22,%22now%22,%22Ferry%20Metrics%22,%7B%22expr%22:%22ferry_telemetry%7Bvessel_id%3D%5C%22$${__value.raw}%5C%22%7D%22%7D%5D"
+
+  # TestData - For demo and testing
+  - name: Ferry Demo Data
+    type: testdata
+    access: proxy
+    isDefault: false
+    jsonData:
+      scenarios:
+        - name: engine_rpm
+          stringInput: "800,1200,1600,1800"
+        - name: engine_temp
+          stringInput: "75,85,95,105"
+        - name: battery_soc
+          stringInput: "85,70,55,40"
+        - name: vessel_speed
+          stringInput: "0,12,18,22"
+
+# Alert Manager Configuration
+alerting:
+  contactpoints.yaml: |
+    contactPoints:
+      - name: ferry-operations-email
+        receivers:
+          - uid: ferry-ops-email
+            type: email
+            settings:
+              addresses: ops@bcferries.com;marine.ops@bcferries.com
+              subject: "BC Ferries Alert: {{ .GroupLabels.alertname }}"
+              message: |
+                Vessel: {{ .GroupLabels.vessel }}
+                Alert: {{ .GroupLabels.alertname }}
+                Severity: {{ .GroupLabels.severity }}
+                Description: {{ .Annotations.description }}
+                Time: {{ .StartsAt }}
+                
+      - name: ferry-emergency-sms
+        receivers:
+          - uid: ferry-emergency-sms
+            type: webhook  
+            settings:
+              url: https://api.ferry.linknote.com/alerts/sms
+              httpMethod: POST
+              title: "Emergency: {{ .GroupLabels.alertname }}"
+              
+      - name: ferry-slack-alerts
+        receivers:
+          - uid: ferry-slack
+            type: slack
+            settings:
+              url: ${SLACK_WEBHOOK_URL}
+              channel: "#ferry-ops"
+              title: "BC Ferries Alert"
+              text: |
+                *Vessel*: {{ .GroupLabels.vessel }}
+                *Alert*: {{ .GroupLabels.alertname }}  
+                *Status*: {{ .Status }}
+                *Description*: {{ .Annotations.description }}
+
+  policies.yaml: |
+    policies:
+      - receiver: ferry-operations-email
+        group_by: [vessel, alertname]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 1h
+        matchers:
+          - severity =~ "(warning|high)"
+          
+      - receiver: ferry-emergency-sms
+        group_by: [vessel, alertname]
+        group_wait: 5s
+        group_interval: 30s  
+        repeat_interval: 10m
+        matchers:
+          - severity = "critical"
+          
+      - receiver: ferry-slack-alerts
+        group_by: [vessel]
+        group_wait: 10s
+        group_interval: 2m
+        repeat_interval: 30m
+        matchers:
+          - alertname =~ "(fire_alarm|engine_emergency|collision_warning)"

@@ -1,11 +1,11 @@
-app = "bc-ferries-control"
+app = "bc-ferries-control-new"
 primary_region = "sea"  # Seattle - closest to BC Ferries operations
 
 [build]
   dockerfile = "Dockerfile"
 
 [http_service]
-  internal_port = 3000
+  internal_port = 8080
   force_https = true
   auto_stop_machines = true
   auto_start_machines = true
@@ -16,39 +16,8 @@ primary_region = "sea"  # Seattle - closest to BC Ferries operations
   interval = "15s"
   method = "GET"
   timeout = "10s"
-  path = "/api/health"
+  path = "/health"
 
 [env]
-  GF_SERVER_DOMAIN = "ferry.linknote.com"
-  GF_SERVER_ROOT_URL = "https://ferry.linknote.com"
-  GF_SECURITY_ADMIN_USER = "bcferries"
-  GF_SECURITY_ALLOW_EMBEDDING = "true"
-  GF_AUTH_ANONYMOUS_ENABLED = "true"
-  GF_AUTH_ANONYMOUS_ORG_NAME = "BC Ferries"
-  GF_AUTH_ANONYMOUS_ORG_ROLE = "Viewer"
-  GF_INSTALL_PLUGINS = "grafana-button-panel,natel-discrete-panel,vonage-status-panel"
-  GF_FEATURE_TOGGLES_ENABLE = "publicDashboards"
   NODE_ENV = "production"
-  
-# Override API service
-[[services]]
-  internal_port = 8080
-  protocol = "tcp"
-  auto_stop_machines = false
-  auto_start_machines = true
-  min_machines_running = 1
-
-  [[services.ports]]
-    port = 8080
-    handlers = ["http"]
-
-  [[services.checks]]
-    grace_period = "30s"
-    interval = "10s"
-    method = "GET"
-    timeout = "5s"
-    path = "/health"
-
-[mounts]
-  source = "grafana_data"
-  destination = "/var/lib/grafana"
+  PORT = "8080"

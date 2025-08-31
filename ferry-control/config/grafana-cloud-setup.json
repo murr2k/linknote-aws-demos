@@ -1,0 +1,214 @@
+{
+  "grafana_cloud_config": {
+    "workspace_name": "bc-ferries-maritime-ops",
+    "stack_slug": "bcferriesdemo",
+    "description": "BC Ferries Maritime Operations Monitoring Dashboard",
+    "region": "us-east-1",
+    "plan": "pro",
+    "url": "https://bcferriesdemo.grafana.net",
+    "deployment_info": {
+      "monitoring_dashboard_url": "ops.linknote.com",
+      "control_dashboard_url": "ferry.linknote.com",
+      "demo_duration": "1 week",
+      "estimated_cost": "$75 USD"
+    }
+  },
+  "data_sources": [
+    {
+      "name": "AWS IoT Core Telemetry",
+      "type": "aws-iot-device-management",
+      "description": "Real-time vessel telemetry data from AWS IoT Core",
+      "connection": {
+        "type": "mqtt",
+        "endpoint": "YOUR_IOT_ENDPOINT.iot.us-west-2.amazonaws.com",
+        "port": 8883,
+        "protocol": "mqtts"
+      },
+      "topics": [
+        "ferry/vessel/001/telemetry/engine",
+        "ferry/vessel/001/telemetry/power",
+        "ferry/vessel/001/telemetry/safety",
+        "ferry/vessel/001/telemetry/navigation"
+      ]
+    },
+    {
+      "name": "HiveMQ Cloud MQTT",
+      "type": "mqtt",
+      "description": "MQTT message broker for real-time ferry data",
+      "connection": {
+        "broker": "YOUR_HIVEMQ_CLUSTER.s2.eu.hivemq.cloud",
+        "port": 8883,
+        "username": "ferry-monitoring",
+        "ssl": true
+      }
+    },
+    {
+      "name": "AWS CloudWatch",
+      "type": "cloudwatch",
+      "description": "AWS infrastructure metrics and logs",
+      "region": "us-west-2",
+      "namespaces": [
+        "AWS/IoT",
+        "AWS/Lambda", 
+        "AWS/ApiGateway",
+        "Custom/FerryTelemetry"
+      ]
+    },
+    {
+      "name": "AWS TimeStream",
+      "type": "timestream",
+      "description": "Time-series database for historical vessel data",
+      "database": "FerryTelemetryDB",
+      "tables": [
+        "VesselTelemetry",
+        "EngineMetrics",
+        "SafetySystems",
+        "NavigationData"
+      ]
+    }
+  ],
+  "dashboard_metrics": {
+    "engine_performance": {
+      "rpm": {
+        "range": "0-2000",
+        "unit": "rpm",
+        "alert_thresholds": {
+          "low": 600,
+          "normal": "800-1600", 
+          "high": 1800,
+          "critical": 1950
+        }
+      },
+      "temperature": {
+        "range": "60-120",
+        "unit": "celsius",
+        "alert_thresholds": {
+          "normal": "70-90",
+          "warning": 95,
+          "critical": 105
+        }
+      },
+      "fuel_flow": {
+        "range": "0-200",
+        "unit": "L/h",
+        "alert_thresholds": {
+          "normal": "20-150",
+          "high": 180,
+          "critical": 200
+        }
+      }
+    },
+    "power_systems": {
+      "battery_soc": {
+        "range": "0-100",
+        "unit": "percent",
+        "alert_thresholds": {
+          "critical_low": 15,
+          "low": 25,
+          "normal": "30-100"
+        }
+      },
+      "power_mode": {
+        "options": ["electric", "hybrid", "diesel"],
+        "default": "hybrid"
+      },
+      "generator_load": {
+        "range": "0-100",
+        "unit": "percent",
+        "alert_thresholds": {
+          "normal": "0-80",
+          "high": 90,
+          "critical": 95
+        }
+      }
+    },
+    "safety_systems": {
+      "fire_alarm_status": {
+        "states": ["normal", "alarm", "fault"],
+        "alert_on": ["alarm", "fault"]
+      },
+      "bilge_level": {
+        "range": "0-100",
+        "unit": "percent",
+        "alert_thresholds": {
+          "normal": "0-20",
+          "warning": 40,
+          "critical": 70
+        }
+      },
+      "co2_levels": {
+        "range": "0-5000",
+        "unit": "ppm",
+        "alert_thresholds": {
+          "normal": "300-400",
+          "warning": 1000,
+          "critical": 5000
+        }
+      }
+    },
+    "navigation": {
+      "speed": {
+        "range": "0-25",
+        "unit": "knots",
+        "alert_thresholds": {
+          "max_operating": 22
+        }
+      },
+      "heading": {
+        "range": "0-360",
+        "unit": "degrees"
+      },
+      "location": {
+        "format": "lat,lon",
+        "geofence": {
+          "vancouver_harbor": {
+            "lat": 49.2827,
+            "lon": -123.1207,
+            "radius": "2km"
+          },
+          "swartz_bay": {
+            "lat": 48.6880,
+            "lon": -123.4070,
+            "radius": "1km"
+          }
+        }
+      }
+    }
+  },
+  "alert_configuration": {
+    "emergency_alerts": {
+      "engine_overheat": {
+        "condition": "engine_temp > 105",
+        "severity": "critical",
+        "notification": ["email", "sms", "webhook"]
+      },
+      "fire_alarm": {
+        "condition": "fire_alarm_status == 'alarm'",
+        "severity": "critical", 
+        "notification": ["email", "sms", "webhook", "pager"]
+      },
+      "low_battery": {
+        "condition": "battery_soc < 15",
+        "severity": "high",
+        "notification": ["email", "webhook"]
+      },
+      "high_bilge": {
+        "condition": "bilge_level > 70",
+        "severity": "high",
+        "notification": ["email", "sms"]
+      }
+    },
+    "operational_alerts": {
+      "rpm_deviation": {
+        "condition": "abs(engine_rpm - target_rpm) > 200",
+        "severity": "medium",
+        "notification": ["email"]
+      },
+      "route_deviation": {
+        "condition": "distance_from_route > 500m",
+        "severity": "medium",
+        "notification": ["email", "webhook"]
+      }
+    }
+  }
+}

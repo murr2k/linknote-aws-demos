@@ -1,39 +1,30 @@
-FROM grafana/grafana:latest
+FROM node:18-alpine
 
-USER root
-
-# Install Node.js for override API
-RUN apt-get update && apt-get install -y \
-    nodejs \
-    npm \
-    supervisor \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Grafana plugins for interactive controls
-RUN grafana-cli plugins install grafana-button-panel
-RUN grafana-cli plugins install natel-discrete-panel
-RUN grafana-cli plugins install vonage-status-panel
-
-# Create override API directory
 WORKDIR /app
-COPY override-api/package*.json ./
-RUN npm install
 
-# Copy application files
-COPY override-api/ ./
-COPY grafana-config/ /etc/grafana/provisioning/
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# Copy package files
+COPY package*.json ./
 
-# Set permissions
-RUN chown -R grafana:grafana /var/lib/grafana
-RUN chown -R grafana:grafana /etc/grafana
-RUN chmod +x /app/server.js
+# Install dependencies
+RUN npm ci --only=production
 
-# Switch back to grafana user
-USER grafana
+# Copy application code
+COPY . .
 
-# Expose ports
-EXPOSE 3000 8080
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S ferry -u 1001
 
-# Use supervisor to run both Grafana and Override API
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Change ownership of the app directory
+RUN chown -R ferry:nodejs /app
+USER ferry
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:8080/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Start the application
+CMD ["node", "server.js"]

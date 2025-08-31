@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BC Ferries - Island Class Vessel Control Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .ferry-logo {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        .vessel-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .control-panel {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .control-panel h3 {
+            margin-bottom: 15px;
+            color: #4fc3f7;
+            border-bottom: 2px solid #4fc3f7;
+            padding-bottom: 5px;
+        }
+        
+        .control-item {
+            margin-bottom: 15px;
+        }
+        
+        .control-item label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .control-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #81c784;
+            margin-bottom: 10px;
+        }
+        
+        .slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4fc3f7;
+            cursor: pointer;
+        }
+        
+        .button {
+            background: linear-gradient(45deg, #4fc3f7, #29b6f6);
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 195, 247, 0.4);
+        }
+        
+        .emergency-button {
+            background: linear-gradient(45deg, #f44336, #e53935);
+        }
+        
+        .emergency-button:hover {
+            box-shadow: 0 5px 15px rgba(244, 67, 54, 0.4);
+        }
+        
+        .status {
+            text-align: center;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .status.connected { border-left: 5px solid #4caf50; }
+        .status.error { border-left: 5px solid #f44336; }
+        
+        .telemetry-log {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .fire-alarm {
+            background: #f44336 !important;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.5; }
+        }
+        
+        .mode-indicator {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin: 5px;
+        }
+        
+        .mode-hybrid { background: #ff9800; }
+        .mode-electric { background: #4caf50; }
+        .mode-diesel { background: #795548; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="ferry-logo">⛴️</div>
+        <h1>BC Ferries - Interactive Vessel Control</h1>
+        <p>Island Class Ferry Telemetry Demonstration</p>
+    </div>
+
+    <div class="vessel-info">
+        <h2>🚢 Island Class 001</h2>
+        <p><strong>Route:</strong> <span id="route">SWB ↔ TSA</span> | 
+           <strong>Speed:</strong> <span id="speed">12.5</span> knots | 
+           <strong>Heading:</strong> <span id="heading">045</span>°</p>
+        <p><strong>Location:</strong> <span id="location">48.6569°N, 123.3933°W</span></p>
+    </div>
+
+    <div class="controls-grid">
+        <!-- Engine Controls -->
+        <div class="control-panel">
+            <h3>🔧 Engine Systems</h3>
+            
+            <div class="control-item">
+                <label for="rpmSlider">Engine RPM</label>
+                <div class="control-value" id="rpmValue">1200</div>
+                <input type="range" id="rpmSlider" class="slider" min="0" max="2000" value="1200" step="50">
+            </div>
+            
+            <div class="control-item">
+                <label for="tempSlider">Engine Temperature (°C)</label>
+                <div class="control-value" id="tempValue">85</div>
+                <input type="range" id="tempSlider" class="slider" min="20" max="120" value="85" step="1">
+            </div>
+            
+            <div class="control-item">
+                <label>Fuel Flow</label>
+                <div class="control-value" id="fuelFlow">120 L/hr</div>
+            </div>
+        </div>
+
+        <!-- Power Systems -->
+        <div class="control-panel">
+            <h3>⚡ Power Management</h3>
+            
+            <div class="control-item">
+                <label for="batterySlider">Battery State of Charge (%)</label>
+                <div class="control-value" id="batteryValue">85</div>
+                <input type="range" id="batterySlider" class="slider" min="0" max="100" value="85" step="5">
+            </div>
+            
+            <div class="control-item">
+                <label>Power Mode</label>
+                <div>
+                    <span id="powerMode" class="mode-indicator mode-hybrid">HYBRID</span>
+                </div>
+            </div>
+            
+            <div class="control-item">
+                <label>Generator Load</label>
+                <div class="control-value" id="genLoad">45%</div>
+            </div>
+        </div>
+
+        <!-- Safety Systems -->
+        <div class="control-panel" id="safetyPanel">
+            <h3>🚨 Safety Systems</h3>
+            
+            <div class="control-item">
+                <label>Fire Detection System</label>
+                <button class="button emergency-button" onclick="triggerFireAlarm()">
+                    🔥 Trigger Fire Alarm
+                </button>
+                <button class="button" onclick="acknowledgeFireAlarm()" id="ackButton" style="display:none;">
+                    ✅ Acknowledge Alarm
+                </button>
+            </div>
+            
+            <div class="control-item">
+                <label for="bilgeSlider">Bilge Level (cm)</label>
+                <div class="control-value" id="bilgeValue">15</div>
+                <input type="range" id="bilgeSlider" class="slider" min="0" max="100" value="15" step="1">
+            </div>
+            
+            <div class="control-item">
+                <label>CO₂ Level</label>
+                <div class="control-value" id="co2Level">400 ppm</div>
+            </div>
+        </div>
+
+        <!-- Emergency Scenarios -->
+        <div class="control-panel">
+            <h3>⚠️ Demo Scenarios</h3>
+            
+            <button class="button" onclick="normalOperations()">
+                🌊 Normal Operations
+            </button>
+            
+            <button class="button" onclick="heavyWeather()">
+                🌪️ Heavy Weather
+            </button>
+            
+            <button class="button" onclick="lowBatteryScenario()">
+                🔋 Low Battery Alert
+            </button>
+            
+            <button class="button" onclick="dockingMode()">
+                🏁 Docking Approach
+            </button>
+        </div>
+    </div>
+
+    <div class="status" id="connectionStatus">
+        <p>🔌 Connecting to vessel control systems...</p>
+    </div>
+
+    <div class="telemetry-log" id="telemetryLog">
+        <p><strong>Telemetry Stream:</strong></p>
+    </div>
+
+    <script>
+        // WebSocket connection for real-time updates
+        const ws = new WebSocket(window.location.protocol === 'https:' ? 'wss:' : 'ws:' + '//' + window.location.host);
+        let vesselState = {};
+
+        ws.onopen = function() {
+            updateConnectionStatus('connected', '🟢 Connected to vessel control systems');
+        };
+
+        ws.onmessage = function(event) {
+            const message = JSON.parse(event.data);
+            
+            if (message.type === 'vessel_state' || message.type === 'telemetry_update') {
+                vesselState = message.data;
+                updateUI();
+                logTelemetry(`Telemetry update: ${message.data.timestamp}`);
+            } else if (message.type === 'emergency_alert') {
+                logTelemetry(`🚨 EMERGENCY: ${message.data.message}`, true);
+            }
+        };
+
+        ws.onclose = function() {
+            updateConnectionStatus('error', '🔴 Connection lost - attempting to reconnect...');
+        };
+
+        function updateConnectionStatus(status, message) {
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.className = `status ${status}`;
+            statusEl.innerHTML = `<p>${message}</p>`;
+        }
+
+        function updateUI() {
+            // Update display values
+            document.getElementById('rpmValue').textContent = vesselState.engine?.rpm || 0;
+            document.getElementById('tempValue').textContent = vesselState.engine?.temperature || 0;
+            document.getElementById('fuelFlow').textContent = `${vesselState.engine?.fuelFlow || 0} L/hr`;
+            document.getElementById('batteryValue').textContent = vesselState.power?.batterySOC || 0;
+            document.getElementById('genLoad').textContent = `${vesselState.power?.generatorLoad || 0}%`;
+            document.getElementById('bilgeValue').textContent = vesselState.safety?.bilgeLevel || 0;
+            document.getElementById('co2Level').textContent = `${vesselState.safety?.co2Level || 0} ppm`;
+            
+            // Update sliders
+            document.getElementById('rpmSlider').value = vesselState.engine?.rpm || 0;
+            document.getElementById('tempSlider').value = vesselState.engine?.temperature || 0;
+            document.getElementById('batterySlider').value = vesselState.power?.batterySOC || 0;
+            document.getElementById('bilgeSlider').value = vesselState.safety?.bilgeLevel || 0;
+            
+            // Update power mode
+            const powerMode = vesselState.power?.mode || 'hybrid';
+            const modeEl = document.getElementById('powerMode');
+            modeEl.textContent = powerMode.toUpperCase();
+            modeEl.className = `mode-indicator mode-${powerMode}`;
+            
+            // Update navigation info
+            document.getElementById('speed').textContent = vesselState.navigation?.speed || 0;
+            document.getElementById('heading').textContent = vesselState.location?.heading || 0;
+            document.getElementById('route').textContent = vesselState.navigation?.route || 'N/A';
+            
+            // Fire alarm status
+            const safetyPanel = document.getElementById('safetyPanel');
+            const ackButton = document.getElementById('ackButton');
+            
+            if (vesselState.safety?.fireAlarm) {
+                safetyPanel.classList.add('fire-alarm');
+                ackButton.style.display = 'inline-block';
+            } else {
+                safetyPanel.classList.remove('fire-alarm');
+                ackButton.style.display = 'none';
+            }
+        }
+
+        function logTelemetry(message, isEmergency = false) {
+            const log = document.getElementById('telemetryLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('p');
+            entry.innerHTML = `[${timestamp}] ${message}`;
+            if (isEmergency) entry.style.color = '#f44336';
+            
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+            
+            // Keep only last 50 entries
+            while (log.children.length > 51) {
+                log.removeChild(log.children[1]);
+            }
+        }
+
+        // Control functions
+        async function sendControlCommand(endpoint, data) {
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    logTelemetry(result.message);
+                } else {
+                    logTelemetry(`Error: ${result.message}`, true);
+                }
+            } catch (error) {
+                logTelemetry(`Network error: ${error.message}`, true);
+            }
+        }
+
+        // Slider event handlers
+        document.getElementById('rpmSlider').oninput = function() {
+            sendControlCommand('/api/override/engine/rpm', { value: parseInt(this.value) });
+        };
+
+        document.getElementById('tempSlider').oninput = function() {
+            sendControlCommand('/api/override/engine/temperature', { value: parseInt(this.value) });
+        };
+
+        document.getElementById('batterySlider').oninput = function() {
+            sendControlCommand('/api/override/power/battery', { value: parseInt(this.value) });
+        };
+
+        document.getElementById('bilgeSlider').oninput = function() {
+            sendControlCommand('/api/override/safety/bilge', { value: parseInt(this.value) });
+        };
+
+        // Emergency and scenario functions
+        function triggerFireAlarm() {
+            sendControlCommand('/api/emergency/fire/trigger', {});
+        }
+
+        function acknowledgeFireAlarm() {
+            sendControlCommand('/api/emergency/fire/acknowledge', {});
+        }
+
+        // Demo scenarios
+        function normalOperations() {
+            sendControlCommand('/api/override/engine/rpm', { value: 1200 });
+            sendControlCommand('/api/override/power/battery', { value: 85 });
+            logTelemetry('🌊 Normal operations scenario activated');
+        }
+
+        function heavyWeather() {
+            sendControlCommand('/api/override/engine/rpm', { value: 1800 });
+            logTelemetry('🌪️ Heavy weather scenario - increased power');
+        }
+
+        function lowBatteryScenario() {
+            sendControlCommand('/api/override/power/battery', { value: 20 });
+            logTelemetry('🔋 Low battery scenario - switching to diesel mode');
+        }
+
+        function dockingMode() {
+            sendControlCommand('/api/override/engine/rpm', { value: 600 });
+            logTelemetry('🏁 Docking approach - reduced speed');
+        }
+
+        // Initialize
+        logTelemetry('BC Ferries Control Dashboard initialized');
+    </script>
+</body>
+</html>
