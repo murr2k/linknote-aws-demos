@@ -1,0 +1,23 @@
+apiVersion: 1
+
+datasources:
+  - name: BC Ferries Control API
+    type: grafana-http-api-datasource
+    access: proxy
+    url: http://localhost:8080
+    isDefault: false
+    jsonData:
+      httpMethod: GET
+      timeout: 10
+    secureJsonData:
+      httpHeaderName1: 'Content-Type'
+      httpHeaderValue1: 'application/json'
+      
+  - name: Vessel State Monitor
+    type: prometheus
+    access: proxy
+    url: http://localhost:8080/metrics
+    isDefault: true
+    jsonData:
+      httpMethod: GET
+      scrapeInterval: '5s'

@@ -1,0 +1,314 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "BC Ferries - Island Class Vessel 001 - Interactive Control",
+    "tags": ["bc-ferries", "vessel-control", "interactive", "demo"],
+    "timezone": "America/Vancouver",
+    "refresh": "5s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "title": "🎯 Demo Control Interface",
+        "type": "text",
+        "gridPos": {"h": 2, "w": 24, "x": 0, "y": 0},
+        "options": {
+          "content": "## BC Ferries Island Class Vessel 001 - Live Control Demo\n**Instructions**: Use the controls below to modify vessel systems. Changes will appear on the AWS monitoring dashboard in 2-3 seconds.\n\n**Current Location**: Vancouver Harbor → Swartz Bay",
+          "mode": "markdown"
+        }
+      },
+      {
+        "title": "Engine Performance Controls",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 2},
+        "collapsed": false,
+        "panels": [
+          {
+            "title": "Current Engine RPM",
+            "type": "stat",
+            "gridPos": {"h": 6, "w": 6, "x": 0, "y": 3},
+            "targets": [{
+              "datasource": "BC Ferries Control API",
+              "queryType": "http",
+              "url": "/api/state",
+              "jsonPath": "$.engineRPM"
+            }],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 1400},
+                    {"color": "orange", "value": 1600},
+                    {"color": "red", "value": 1800}
+                  ]
+                },
+                "unit": "rpm",
+                "min": 0,
+                "max": 2000
+              }
+            },
+            "options": {
+              "reduceOptions": {
+                "values": false,
+                "calcs": ["lastNotNull"],
+                "fields": ""
+              },
+              "orientation": "auto",
+              "textMode": "value_and_name",
+              "colorMode": "background"
+            }
+          },
+          {
+            "title": "RPM Quick Controls",
+            "type": "button-panel",
+            "gridPos": {"h": 6, "w": 9, "x": 6, "y": 3},
+            "options": {
+              "buttons": [
+                {
+                  "text": "🟢 Idle (800 RPM)",
+                  "variant": "success",
+                  "url": "http://localhost:8080/api/override/engine/rpm",
+                  "method": "POST",
+                  "payload": "{\"value\": 800}"
+                },
+                {
+                  "text": "🔵 Cruise (1200 RPM)",
+                  "variant": "primary",
+                  "url": "http://localhost:8080/api/override/engine/rpm", 
+                  "method": "POST",
+                  "payload": "{\"value\": 1200}"
+                },
+                {
+                  "text": "🟡 High Load (1600 RPM)",
+                  "variant": "warning",
+                  "url": "http://localhost:8080/api/override/engine/rpm",
+                  "method": "POST", 
+                  "payload": "{\"value\": 1600}"
+                },
+                {
+                  "text": "🔴 Full Power (1800 RPM)",
+                  "variant": "danger",
+                  "url": "http://localhost:8080/api/override/engine/rpm",
+                  "method": "POST",
+                  "payload": "{\"value\": 1800}"
+                }
+              ],
+              "orientation": "horizontal"
+            }
+          },
+          {
+            "title": "Engine Temperature",
+            "type": "gauge",
+            "gridPos": {"h": 6, "w": 9, "x": 15, "y": 3},
+            "targets": [{
+              "datasource": "BC Ferries Control API",
+              "queryType": "http",
+              "url": "/api/state",
+              "jsonPath": "$.engineTemp"
+            }],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 90},
+                    {"color": "red", "value": 100}
+                  ]
+                },
+                "unit": "celsius",
+                "min": 60,
+                "max": 120
+              }
+            }
+          }
+        ]
+      },
+      {
+        "title": "🚨 Emergency Controls",
+        "type": "row", 
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 9},
+        "collapsed": false,
+        "panels": [
+          {
+            "title": "Emergency Stop",
+            "type": "button-panel",
+            "gridPos": {"h": 4, "w": 8, "x": 0, "y": 10},
+            "options": {
+              "buttons": [
+                {
+                  "text": "🛑 ENGINE EMERGENCY STOP 🛑",
+                  "variant": "destructive",
+                  "url": "http://localhost:8080/api/emergency/engine/stop",
+                  "method": "POST",
+                  "confirmation": "This will immediately stop all engines. Continue?"
+                }
+              ]
+            }
+          },
+          {
+            "title": "Fire Emergency",
+            "type": "button-panel",
+            "gridPos": {"h": 4, "w": 8, "x": 8, "y": 10},
+            "options": {
+              "buttons": [
+                {
+                  "text": "🚨 TRIGGER FIRE ALARM 🚨",
+                  "variant": "destructive",
+                  "url": "http://localhost:8080/api/emergency/fire/trigger",
+                  "method": "POST",
+                  "confirmation": "This will activate fire emergency protocols. Continue?"
+                }
+              ]
+            }
+          },
+          {
+            "title": "Demo Reset",
+            "type": "button-panel",
+            "gridPos": {"h": 4, "w": 8, "x": 16, "y": 10},
+            "options": {
+              "buttons": [
+                {
+                  "text": "🔄 Reset to Normal Operations",
+                  "variant": "secondary",
+                  "url": "http://localhost:8080/api/demo/reset",
+                  "method": "POST"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "title": "⚡ Power Management",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14},
+        "collapsed": false,
+        "panels": [
+          {
+            "title": "Battery State of Charge", 
+            "type": "gauge",
+            "gridPos": {"h": 6, "w": 8, "x": 0, "y": 15},
+            "targets": [{
+              "datasource": "BC Ferries Control API",
+              "queryType": "http",
+              "url": "/api/state",
+              "jsonPath": "$.batterySOC"
+            }],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": null},
+                    {"color": "yellow", "value": 30},
+                    {"color": "green", "value": 60}
+                  ]
+                },
+                "unit": "percent",
+                "min": 0,
+                "max": 100
+              }
+            }
+          },
+          {
+            "title": "Power Mode Selection",
+            "type": "button-panel",
+            "gridPos": {"h": 6, "w": 8, "x": 8, "y": 15},
+            "options": {
+              "buttons": [
+                {
+                  "text": "⚡ Electric Mode",
+                  "variant": "primary",
+                  "url": "http://localhost:8080/api/override/power/mode/electric",
+                  "method": "POST"
+                },
+                {
+                  "text": "🔋 Hybrid Mode",
+                  "variant": "secondary",
+                  "url": "http://localhost:8080/api/override/power/mode/hybrid",
+                  "method": "POST"
+                },
+                {
+                  "text": "⛽ Diesel Mode",
+                  "variant": "tertiary",
+                  "url": "http://localhost:8080/api/override/power/mode/diesel",
+                  "method": "POST"
+                }
+              ],
+              "orientation": "vertical"
+            }
+          },
+          {
+            "title": "Current Power Mode",
+            "type": "stat",
+            "gridPos": {"h": 6, "w": 8, "x": 16, "y": 15},
+            "targets": [{
+              "datasource": "BC Ferries Control API",
+              "queryType": "http",
+              "url": "/api/state",
+              "jsonPath": "$.powerMode"
+            }],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "value"},
+                "mappings": [
+                  {"options": {"electric": {"color": "green", "text": "⚡ Electric"}}, "type": "value"},
+                  {"options": {"hybrid": {"color": "blue", "text": "🔋 Hybrid"}}, "type": "value"},
+                  {"options": {"diesel": {"color": "orange", "text": "⛽ Diesel"}}, "type": "value"}
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "title": "🎭 Demo Scenarios",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 21},
+        "collapsed": false,
+        "panels": [
+          {
+            "title": "Pre-configured Demo Scenarios",
+            "type": "button-panel",
+            "gridPos": {"h": 4, "w": 24, "x": 0, "y": 22},
+            "options": {
+              "buttons": [
+                {
+                  "text": "🌊 Heavy Weather Operations",
+                  "variant": "warning",
+                  "url": "http://localhost:8080/api/demo/scenario/heavy-weather",
+                  "method": "POST"
+                },
+                {
+                  "text": "⚓ Docking Procedure",
+                  "variant": "primary",
+                  "url": "http://localhost:8080/api/demo/scenario/docking",
+                  "method": "POST"
+                },
+                {
+                  "text": "🚨 Emergency Evacuation",
+                  "variant": "destructive",
+                  "url": "http://localhost:8080/api/demo/scenario/emergency-evacuation",
+                  "method": "POST",
+                  "confirmation": "This will simulate full emergency protocols. Continue?"
+                },
+                {
+                  "text": "🔄 Reset to Normal",
+                  "variant": "secondary",
+                  "url": "http://localhost:8080/api/demo/reset",
+                  "method": "POST"
+                }
+              ],
+              "orientation": "horizontal"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

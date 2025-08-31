@@ -1,0 +1,237 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'BC Ferries Enterprise Monitoring - AWS Managed Grafana for ops.linknote.com'
+
+Parameters:
+  WorkspaceName:
+    Type: String
+    Default: bc-ferries-enterprise
+    Description: Name for the Grafana workspace
+    
+  CustomDomain:
+    Type: String
+    Default: ops.linknote.com
+    Description: Custom domain for the Grafana workspace
+
+Resources:
+  # IAM Role for Grafana Service
+  GrafanaServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: BC-Ferries-Grafana-Service-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: grafana.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonGrafanaServiceRole
+      Policies:
+        - PolicyName: BCFerriesTimestreamAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - timestream:DescribeDatabase
+                  - timestream:DescribeTable
+                  - timestream:ListDatabases
+                  - timestream:ListTables
+                  - timestream:ListMeasures
+                  - timestream:Select
+                  - timestream:GetAwsBackupPolicy
+                  - timestream:GetAwsRestorePolicy
+                Resource: 
+                  - !Sub 'arn:aws:timestream:${AWS::Region}:${AWS::AccountId}:database/BCFerries'
+                  - !Sub 'arn:aws:timestream:${AWS::Region}:${AWS::AccountId}:database/BCFerries/table/*'
+        - PolicyName: CloudWatchAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                  - cloudwatch:GetMetricData
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:FilterLogEvents
+                  - logs:GetLogEvents
+                Resource: '*'
+
+  # AWS Managed Grafana Workspace
+  BCFerriesGrafanaWorkspace:
+    Type: AWS::Grafana::Workspace
+    Properties:
+      Name: !Ref WorkspaceName
+      Description: 'BC Ferries Fleet Enterprise Monitoring Dashboard'
+      AccountAccessType: CURRENT_ACCOUNT
+      AuthenticationProviders:
+        - AWS_SSO
+      DataSources:
+        - TIMESTREAM
+        - CLOUDWATCH
+        - PROMETHEUS
+      NotificationDestinations:
+        - SNS
+      OrganizationRoleName: BC-Ferries-Grafana-Org-Role
+      PermissionType: SERVICE_MANAGED
+      RoleArn: !GetAtt GrafanaServiceRole.Arn
+      StackSetName: BC-Ferries-Grafana-Stack
+
+  # TimeStream Database for Maritime Telemetry
+  BCFerriesTimestreamDatabase:
+    Type: AWS::Timestream::Database
+    Properties:
+      DatabaseName: BCFerries
+      
+  BCFerriesTimestreamTable:
+    Type: AWS::Timestream::Table
+    Properties:
+      DatabaseName: !Ref BCFerriesTimestreamDatabase
+      TableName: VesselTelemetry
+      RetentionProperties:
+        MemoryStoreRetentionPeriodInHours: 24
+        MagneticStoreRetentionPeriodInDays: 365
+      MagneticStoreWriteProperties:
+        EnableMagneticStoreWrites: true
+
+  # CloudWatch Log Group for Maritime Events
+  BCFerriesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /bc-ferries/maritime-telemetry
+      RetentionInDays: 30
+
+  # SNS Topic for Alerts
+  BCFerriesAlertsNS:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: bc-ferries-alerts
+      DisplayName: BC Ferries Maritime Alerts
+      
+  # IoT Core Policy for Ferry Devices
+  BCFerriesIoTPolicy:
+    Type: AWS::IoT::Policy
+    Properties:
+      PolicyName: BCFerriesFleetPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - iot:Connect
+              - iot:Publish
+              - iot:Subscribe
+              - iot:Receive
+            Resource:
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/bc-ferries-*'
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/fleet/bcferries/*'
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/fleet/bcferries/*'
+
+  # IoT Rule to route telemetry to TimeStream
+  BCFerriesTelemetryRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: BCFerriesTelemetryToTimestream
+      TopicRulePayload:
+        Sql: "SELECT *, topic() as topic FROM 'fleet/bcferries/+/telemetry'"
+        Actions:
+          - Timestream:
+              DatabaseName: !Ref BCFerriesTimestreamDatabase
+              TableName: !Ref BCFerriesTimestreamTable
+              Dimensions:
+                - Name: vesselId
+                  Value: ${vesselId}
+                - Name: sensorType
+                  Value: ${parse_json(payload).sensors}
+              RoleArn: !GetAtt TimestreamRole.Arn
+              
+  # IoT Rule for Emergency Alerts
+  BCFerriesEmergencyRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: BCFerriesEmergencyAlerts
+      TopicRulePayload:
+        Sql: "SELECT * FROM 'fleet/bcferries/+/emergency/+' WHERE emergency = true"
+        Actions:
+          - Sns:
+              TargetArn: !Ref BCFerriesAlertsNS
+              RoleArn: !GetAtt IoTSNSRole.Arn
+              MessageFormat: JSON
+
+  # IAM Role for TimeStream writes
+  TimestreamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: iot.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: TimestreamWriteAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - timestream:WriteRecords
+                  - timestream:DescribeEndpoints
+                Resource: 
+                  - !GetAtt BCFerriesTimestreamTable.Arn
+
+  # IAM Role for SNS alerts
+  IoTSNSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: iot.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SNSPublishAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref BCFerriesAlertsNS
+
+Outputs:
+  GrafanaWorkspaceId:
+    Description: 'AWS Managed Grafana Workspace ID'
+    Value: !Ref BCFerriesGrafanaWorkspace
+    Export:
+      Name: BC-Ferries-Grafana-Workspace-ID
+      
+  GrafanaWorkspaceEndpoint:
+    Description: 'Grafana Workspace Endpoint for ops.linknote.com'
+    Value: !GetAtt BCFerriesGrafanaWorkspace.Endpoint
+    Export:
+      Name: BC-Ferries-Grafana-Endpoint
+      
+  TimestreamDatabase:
+    Description: 'TimeStream Database for maritime telemetry'
+    Value: !Ref BCFerriesTimestreamDatabase
+    Export:
+      Name: BC-Ferries-Timestream-DB
+      
+  TimestreamTable:
+    Description: 'TimeStream Table for vessel telemetry'
+    Value: !Ref BCFerriesTimestreamTable
+    Export:
+      Name: BC-Ferries-Timestream-Table
+      
+  SNSAlertsopic:
+    Description: 'SNS Topic for maritime alerts'
+    Value: !Ref BCFerriesAlertsNS
+    Export:
+      Name: BC-Ferries-SNS-Alerts
