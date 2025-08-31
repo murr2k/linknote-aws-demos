@@ -1,0 +1,14 @@
+[
+  {
+    "ParameterKey": "DomainName",
+    "ParameterValue": "linknote.com"
+  },
+  {
+    "ParameterKey": "WWWDomainName", 
+    "ParameterValue": "www.linknote.com"
+  },
+  {
+    "ParameterKey": "CloudfrontPriceClass",
+    "ParameterValue": "PriceClass_100"
+  }
+]

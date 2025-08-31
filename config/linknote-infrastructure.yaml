@@ -1,0 +1,386 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Linknote.com AWS Infrastructure - S3, CloudFront, Certificate Manager, and Secrets Manager'
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: 'linknote.com'
+    Description: 'Primary domain name'
+  
+  WWWDomainName:
+    Type: String
+    Default: 'www.linknote.com'
+    Description: 'WWW subdomain'
+  
+  CloudfrontPriceClass:
+    Type: String
+    Default: 'PriceClass_100'
+    AllowedValues:
+      - 'PriceClass_100'
+      - 'PriceClass_200'
+      - 'PriceClass_All'
+    Description: 'CloudFront price class (100=US/Europe, 200=US/Europe/Asia, All=Global)'
+
+Resources:
+  # S3 Bucket for main domain
+  LinknoteS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref DomainName
+      WebsiteConfiguration:
+        IndexDocument: 'index.html'
+        ErrorDocument: 'error.html'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: 'Purpose'
+          Value: 'AWS Portfolio Demo'
+        - Key: 'Owner'
+          Value: 'Murray Kopit'
+
+  # S3 Bucket for WWW redirect
+  LinknoteWWWS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref WWWDomainName
+      WebsiteConfiguration:
+        RedirectAllRequestsTo:
+          HostName: !Ref DomainName
+          Protocol: 'https'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      Tags:
+        - Key: 'Purpose'
+          Value: 'WWW Redirect'
+        - Key: 'Owner'
+          Value: 'Murray Kopit'
+
+  # Bucket Policy for main domain
+  LinknoteS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LinknoteS3Bucket
+      PolicyDocument:
+        Statement:
+          - Sid: 'PublicReadGetObject'
+            Effect: 'Allow'
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub '${LinknoteS3Bucket}/*'
+          - Sid: 'CloudFrontOriginAccess'
+            Effect: 'Allow'
+            Principal:
+              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOriginAccessIdentity}'
+            Action: 's3:GetObject'
+            Resource: !Sub '${LinknoteS3Bucket}/*'
+
+  # Bucket Policy for WWW redirect
+  LinknoteWWWS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LinknoteWWWS3Bucket
+      PolicyDocument:
+        Statement:
+          - Sid: 'PublicReadGetObject'
+            Effect: 'Allow'
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub '${LinknoteWWWS3Bucket}/*'
+
+  # CloudFront Origin Access Identity
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for ${DomainName}'
+
+  # SSL Certificate
+  LinknoteSSLCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      SubjectAlternativeNames:
+        - !Ref WWWDomainName
+      ValidationMethod: 'DNS'
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref 'AWS::NoValue'  # Must be validated manually via DNS
+        - DomainName: !Ref WWWDomainName
+          HostedZoneId: !Ref 'AWS::NoValue'  # Must be validated manually via DNS
+      Tags:
+        - Key: 'Purpose'
+          Value: 'SSL Certificate for Linknote'
+        - Key: 'Owner'
+          Value: 'Murray Kopit'
+
+  # CloudFront Distribution for main domain
+  LinknoteCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref DomainName
+          - !Ref WWWDomainName
+        DefaultCacheBehavior:
+          TargetOriginId: !Sub '${DomainName}-s3-origin'
+          ViewerProtocolPolicy: 'redirect-to-https'
+          AllowedMethods:
+            - 'GET'
+            - 'HEAD'
+            - 'OPTIONS'
+          CachedMethods:
+            - 'GET'
+            - 'HEAD'
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: 'none'
+          MinTTL: 0
+          DefaultTTL: 86400
+          MaxTTL: 31536000
+          Compress: true
+        DefaultRootObject: 'index.html'
+        Enabled: true
+        HttpVersion: 'http2'
+        IPV6Enabled: true
+        Origins:
+          - Id: !Sub '${DomainName}-s3-origin'
+            DomainName: !Sub '${LinknoteS3Bucket}.s3.${AWS::Region}.amazonaws.com'
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}'
+        PriceClass: !Ref CloudfrontPriceClass
+        ViewerCertificate:
+          AcmCertificateArn: !Ref LinknoteSSLCertificate
+          SslSupportMethod: 'sni-only'
+          MinimumProtocolVersion: 'TLSv1.2_2021'
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: '/index.html'
+            ErrorCachingMinTTL: 300
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: '/index.html'
+            ErrorCachingMinTTL: 300
+        Comment: !Sub 'CloudFront distribution for ${DomainName}'
+      Tags:
+        - Key: 'Purpose'
+          Value: 'CDN for Linknote'
+        - Key: 'Owner'
+          Value: 'Murray Kopit'
+
+  # AWS Secrets Manager for application secrets
+  LinknoteSecretsManagerSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: 'linknote/application-secrets'
+      Description: 'Application secrets for Linknote.com'
+      SecretString: !Sub |
+        {
+          "environment": "production",
+          "domain": "${DomainName}",
+          "cloudfront_distribution_id": "${LinknoteCloudFrontDistribution}",
+          "s3_bucket": "${LinknoteS3Bucket}",
+          "certificate_arn": "${LinknoteSSLCertificate}"
+        }
+      KmsKeyId: 'alias/aws/secretsmanager'
+      Tags:
+        - Key: 'Purpose'
+          Value: 'Application Configuration'
+        - Key: 'Owner'
+          Value: 'Murray Kopit'
+
+  # CloudTrail for audit logging
+  LinknoteCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: 'linknote-audit-trail'
+      S3BucketName: !Ref LinknoteCloudTrailBucket
+      S3KeyPrefix: 'cloudtrail-logs/'
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: 'All'
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: 'AWS::S3::Object'
+              Values:
+                - !Sub '${LinknoteS3Bucket}/*'
+            - Type: 'AWS::SecretsManager::Secret'
+              Values:
+                - !Ref LinknoteSecretsManagerSecret
+      Tags:
+        - Key: 'Purpose'
+          Value: 'Audit Trail for Linknote'
+        - Key: 'Owner'
+          Value: 'Murray Kopit'
+
+  # S3 Bucket for CloudTrail logs
+  LinknoteCloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${DomainName}-cloudtrail-logs'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'CloudTrailLogRetention'
+            Status: Enabled
+            ExpirationInDays: 90
+            Transitions:
+              - StorageClass: 'STANDARD_IA'
+                TransitionInDays: 30
+              - StorageClass: 'GLACIER'
+                TransitionInDays: 60
+      Tags:
+        - Key: 'Purpose'
+          Value: 'CloudTrail Log Storage'
+        - Key: 'Owner'
+          Value: 'Murray Kopit'
+
+  # CloudTrail Bucket Policy
+  LinknoteCloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LinknoteCloudTrailBucket
+      PolicyDocument:
+        Statement:
+          - Sid: 'AWSCloudTrailAclCheck'
+            Effect: 'Allow'
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub '${LinknoteCloudTrailBucket}'
+          - Sid: 'AWSCloudTrailWrite'
+            Effect: 'Allow'
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub '${LinknoteCloudTrailBucket}/cloudtrail-logs/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  # IAM Role for GitHub Actions
+  GitHubActionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: 'GitHubActions-LinknoteDeployment'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Federated: !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals:
+                'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com'
+              StringLike:
+                'token.actions.githubusercontent.com:sub': 'repo:murr2k/linknote-aws-demos:*'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/CloudFrontFullAccess'
+      Policies:
+        - PolicyName: 'LinknoteS3DeploymentPolicy'
+          PolicyDocument:
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub '${LinknoteS3Bucket}'
+                  - !Sub '${LinknoteS3Bucket}/*'
+                  - !Sub '${LinknoteWWWS3Bucket}'
+                  - !Sub '${LinknoteWWWS3Bucket}/*'
+              - Effect: 'Allow'
+                Action:
+                  - 'cloudfront:CreateInvalidation'
+                  - 'cloudfront:GetDistribution'
+                  - 'cloudfront:ListDistributions'
+                Resource: '*'
+              - Effect: 'Allow'
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource: !Ref LinknoteSecretsManagerSecret
+      Tags:
+        - Key: 'Purpose'
+          Value: 'GitHub Actions Deployment'
+        - Key: 'Owner'
+          Value: 'Murray Kopit'
+
+Outputs:
+  WebsiteURL:
+    Description: 'Main website URL'
+    Value: !Sub 'https://${DomainName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WebsiteURL'
+
+  WWWWebsiteURL:
+    Description: 'WWW website URL'
+    Value: !Sub 'https://${WWWDomainName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WWWWebsiteURL'
+
+  S3BucketName:
+    Description: 'Name of the S3 bucket'
+    Value: !Ref LinknoteS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketName'
+
+  CloudFrontDistributionId:
+    Description: 'CloudFront Distribution ID'
+    Value: !Ref LinknoteCloudFrontDistribution
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontDistributionId'
+
+  CloudFrontDistributionDomainName:
+    Description: 'CloudFront Distribution Domain Name'
+    Value: !GetAtt LinknoteCloudFrontDistribution.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontDomainName'
+
+  SSLCertificateArn:
+    Description: 'SSL Certificate ARN'
+    Value: !Ref LinknoteSSLCertificate
+    Export:
+      Name: !Sub '${AWS::StackName}-SSLCertificateArn'
+
+  SecretsManagerArn:
+    Description: 'Secrets Manager Secret ARN'
+    Value: !Ref LinknoteSecretsManagerSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-SecretsManagerArn'
+
+  CloudTrailArn:
+    Description: 'CloudTrail ARN'
+    Value: !GetAtt LinknoteCloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailArn'
+
+  GitHubActionsRoleArn:
+    Description: 'GitHub Actions IAM Role ARN'
+    Value: !GetAtt GitHubActionsRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-GitHubActionsRoleArn'

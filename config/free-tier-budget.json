@@ -1,0 +1,20 @@
+{
+  "BudgetName": "FreeTierProtection",
+  "BudgetLimit": {
+    "Amount": "1.00",
+    "Unit": "USD"
+  },
+  "TimeUnit": "MONTHLY",
+  "TimePeriod": {
+    "Start": "2025-09-01T00:00:00.000Z",
+    "End": "2087-06-15T00:00:00.000Z"
+  },
+  "BudgetType": "COST",
+  "CostFilters": {},
+  "CalculatedSpend": {
+    "ActualSpend": {
+      "Amount": "0",
+      "Unit": "USD"
+    }
+  }
+}
