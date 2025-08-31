@@ -1,177 +1,206 @@
-# Linknote AWS DevOps Portfolio
+# BC Ferries Maritime Telemetry - Interactive Demo & Enterprise Architecture
 
-**Enterprise AWS cloud architecture and DevOps demonstration by Murray Kopit**
+**Enterprise AWS telemetry system with interactive demonstration capabilities for BC Ferries Island Class vessel project**
 
-[![AWS](https://img.shields.io/badge/AWS-Cloud-orange)](https://aws.amazon.com)
-[![GitHub Actions](https://img.shields.io/badge/GitHub-Actions-blue)](https://github.com/features/actions)
-[![Security](https://img.shields.io/badge/Security-Enterprise-green)](#security-features)
-[![Live Demo](https://img.shields.io/badge/Demo-Live-success)](https://linknote.com)
-[![Cost](https://img.shields.io/badge/Cost-<$1/month-brightgreen)](#cost-optimization)
+[![AWS](https://img.shields.io/badge/AWS-IoT_Core_+_TimeStream-orange)](https://aws.amazon.com/iot-core/)
+[![HiveMQ](https://img.shields.io/badge/HiveMQ-MQTT_Broker-blue)](https://www.hivemq.com/)
+[![Interactive](https://img.shields.io/badge/Demo-Interactive_Controls-green)](#interactive-demo-features)
+[![Live Demo](https://img.shields.io/badge/Status-Interview_Ready-success)](docs/complete-implementation-plan.md)
+[![Cost](https://img.shields.io/badge/Budget-$75_for_1_week-brightgreen)](docs/live-demo-cost-breakdown.md)
 
-## 🌐 Live Production Demo
-**https://linknote.com** - Complete AWS infrastructure running in production
+## 🎯 Project Overview
 
-## 🎯 Portfolio Highlights
+This repository contains the complete technical architecture and implementation plan for BC Ferries' Island Class vessel telemetry system, featuring **interactive demonstration capabilities** designed specifically for the November 2025 deployment timeline.
 
-This repository demonstrates **production-ready AWS expertise** for enterprise cloud environments:
+**Key Innovation**: Dual-screen interactive demo where you can control vessel systems in real-time and immediately see the response on AWS monitoring dashboards.
 
-- **15+ AWS Services** integrated in a cohesive architecture
-- **Zero hardcoded secrets** with enterprise credential management  
-- **Automated CI/CD** pipeline with GitHub Actions
-- **Complete security audit trail** with AWS CloudTrail
-- **Cost optimized** to run within AWS Free Tier (< $1/month)
-- **Production deployment** serving live traffic
+## 🚢 BC Ferries Context
 
-## ☁️ AWS Services Architecture
+- **Vessels**: Island Class hybrid-electric ferries (80.8m, 47 vehicles, 392 passengers)
+- **Timeline**: First vessel telemetry begins November 2025
+- **Integration**: Damen Triton gateway compatibility
+- **Scale**: 10,000+ sensors per vessel, expandable to 50+ vessel fleet
+- **Security**: Zero trust architecture with mTLS and continuous monitoring
 
-### Infrastructure & Content Delivery
+## 🏗️ Interactive Demo Architecture
+
+### **Dual Dashboard Setup**
 ```
-┌─────────────┐    ┌──────────────┐    ┌─────────────────┐
-│   S3 Bucket │ -> │  CloudFront  │ -> │ Global Users    │
-│   Website   │    │     CDN      │    │   (HTTPS)       │
-└─────────────┘    └──────────────┘    └─────────────────┘
-```
-
-- **Amazon S3** - Static website hosting with versioning and lifecycle policies
-- **CloudFront CDN** - Global content delivery network with custom SSL
-- **Certificate Manager** - Free SSL/TLS certificates with automatic renewal
-- **Route 53** - DNS management and health monitoring
-
-### Security & Identity Management
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│ GitHub Secrets  │ -> │ AWS Secrets Mgr  │ -> │ Applications    │
-│ (Infrastructure)│    │ (App Secrets)    │    │ (Runtime)       │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+┌─────────────────────┐    ┌─────────────────────┐
+│   Left Screen       │    │   Right Screen      │
+│ Vessel Controls     │    │ AWS Monitoring      │  
+│ (Fly.io Grafana)    │    │ (Grafana Cloud)     │
+│                     │    │                     │
+│ • Engine RPM Slider │ -> │ • Real-time RPM     │
+│ • Fire Alarm Button │ -> │ • Emergency Alerts  │
+│ • Battery Override  │ -> │ • Power System      │
+└─────────────────────┘    └─────────────────────┘
 ```
 
-- **AWS Secrets Manager** - Centralized credential storage with automatic rotation
-- **AWS KMS** - Key management service for encryption at rest
-- **IAM** - Fine-grained access control with least-privilege policies
-- **CloudTrail** - Complete audit logging and compliance tracking
+### **Live Demo Flow**
+1. **Presenter clicks control** (e.g., "Increase Engine RPM")
+2. **API call triggers** simulator override
+3. **MQTT message publishes** to HiveMQ broker
+4. **AWS IoT Core receives** and processes message  
+5. **TimeStream stores** time-series data
+6. **Grafana updates** monitoring dashboard (2-3 seconds)
+7. **Visual feedback** proves real-time capability
 
-### DevOps & Automation
-```
-┌─────────────┐    ┌──────────────┐    ┌─────────────────┐
-│ Git Push    │ -> │ GitHub       │ -> │ AWS Deploy      │
-│ (Trigger)   │    │ Actions      │    │ (Automated)     │
-└─────────────┘    └──────────────┘    └─────────────────┘
-```
+## 📊 Technical Features
 
-- **GitHub Actions** - Fully automated CI/CD pipeline
-- **GitHub Repository Secrets** - Secure credential management
-- **Automated Testing** - Pre-deployment validation
-- **Blue/Green Deployment** - Zero-downtime releases
+### **Maritime Telemetry (200 Sensors)**
+- **Engine Systems**: RPM, temperature, pressure, fuel flow, vibration
+- **Power Systems**: Battery SOC, generator, hybrid mode switching
+- **Navigation**: GPS, compass, AIS, depth sounder, radar
+- **Environmental**: Weather, water temperature, marine life detection
+- **Safety Systems**: Fire detection, bilge monitoring, CO levels
+- **HVAC/Comfort**: Cabin temperature, ventilation systems
 
-### Monitoring & Cost Management
-- **CloudWatch** - Application and infrastructure monitoring
-- **AWS Budgets** - Cost tracking with email alerts
-- **Cost Explorer** - Detailed spend analysis and optimization
-- **Free Tier Monitoring** - Automated budget protection
+### **Interactive Controls**
+- **Engine Controls**: RPM override slider, emergency stop button
+- **Safety Simulation**: Fire alarm trigger, bilge level adjustment
+- **Power Management**: Battery SOC override, mode switching
+- **Emergency Scenarios**: Pre-configured cascade sequences
 
-## 🔒 Security Features
+### **Enterprise Architecture**
+- **Zero Trust Security**: mTLS certificates, continuous authorization
+- **Scalable Design**: Template-driven dashboards for 10,000+ topics
+- **Multi-Tier Storage**: Hot path (real-time) + cold path (analytics)
+- **Compliance Ready**: Audit trails, data governance, regulatory reporting
 
-### Enterprise Security Architecture
-- **Bootstrap Paradox Resolution** - Separates infrastructure and application credentials
-- **Zero Secrets in Code** - All credentials managed through secure services
-- **Encryption Everywhere** - At rest (KMS), in transit (TLS 1.3), and at runtime
-- **Complete Audit Trail** - Every action logged via CloudTrail
-- **Least Privilege Access** - IAM policies with minimal required permissions
+## 💰 Cost Analysis
 
-### Credential Management Flow
-1. **GitHub Repository Secrets** → Store AWS infrastructure credentials
-2. **GitHub Actions** → Use secrets automatically for deployment
-3. **AWS Secrets Manager** → Store application-level secrets
-4. **Applications** → Retrieve secrets at runtime via AWS API
+### **1-Week Live Demo: $75 Total**
 
-## 🚀 DevOps Pipeline
+| Service | Cost | Purpose |
+|---------|------|---------|
+| AWS IoT Core | $25 | MQTT broker (optimized message rate) |
+| TimeStream | $0 | Time-series storage (free tier) |
+| Lambda | $0 | Data processing (free tier) |
+| Other AWS | $0.32 | Secrets, CloudWatch, S3 (free tier) |
+| HiveMQ Cloud | $49 | Professional MQTT broker |
+| Fly.io | $0.52 | Simulator + control dashboard |
+| **TOTAL** | **$74.84** | **8-day implementation** |
 
-### Automated Deployment Flow
-```bash
-Developer commits → GitHub Actions triggered → AWS credentials loaded → 
-Deploy to S3 → Invalidate CloudFront → Live site updated
-```
+### **Production Scale (6 Vessels): $422/month**
+- Scales linearly: ~$70/vessel/month
+- ROI through fuel optimization and predictive maintenance
+- Enterprise security and compliance included
 
-### Key DevOps Practices
-- **Infrastructure as Code** - All resources documented and reproducible
-- **Automated Testing** - Pre-deployment validation and security checks  
-- **Progressive Deployment** - Staged rollouts with rollback capability
-- **Monitoring Integration** - Real-time alerts and performance tracking
+## 🛠️ Implementation Timeline
 
-## 💰 Cost Optimization
+### **8-Day Development Plan**
+- **Days 1-2**: AWS infrastructure + external services setup
+- **Days 3-4**: MQTT simulator with override capabilities
+- **Days 5-6**: AWS integration and monitoring dashboards  
+- **Day 7**: Interactive control dashboard development
+- **Day 8**: End-to-end testing and demo preparation
 
-**Total Monthly Cost: < $1.00** (within AWS Free Tier)
+### **Ready for November 2025 Deployment**
+- Production-ready architecture
+- Damen Triton gateway integration
+- Enterprise security and compliance
+- Scalable to full 50+ vessel fleet
 
-| Service | Free Tier Limit | Usage | Cost |
-|---------|----------------|--------|------|
-| S3 | 5GB storage, 20K requests | ~500MB | $0.00 |
-| CloudFront | 1TB transfer, 10M requests | ~1GB | $0.00 |
-| Certificate Manager | Unlimited certificates | 2 certs | $0.00 |
-| Secrets Manager | First 3 secrets | 5 secrets | ~$0.80 |
-| **Total** | | | **< $1.00** |
+## 📋 Documentation
 
-## 📊 Technical Metrics
+### **Complete Implementation Guides**
+- [**Complete Implementation Plan**](docs/complete-implementation-plan.md) - Full 8-day development timeline
+- [**Interactive Demo Architecture**](docs/interactive-demo-architecture.md) - Dual dashboard technical design
+- [**Live Demo Cost Breakdown**](docs/live-demo-cost-breakdown.md) - Detailed cost analysis and optimization
+- [**Enhanced Enterprise Architecture**](docs/enhanced-bc-ferries-architecture.md) - Zero trust and scalability patterns
 
-- **Performance**: Global CDN with <100ms response times
-- **Availability**: 99.9% uptime with CloudFront redundancy
-- **Security**: Zero vulnerabilities, complete audit coverage
-- **Scalability**: Auto-scaling to handle traffic spikes
-- **Maintainability**: Fully automated deployment and monitoring
+### **Original Planning Documents**
+- [**BC Ferries Resources & Cost Analysis**](config/bc-ferries-resources-cost-analysis.md) - Resource requirements
+- [**AWS Cost Calculator Estimate**](config/aws-cost-calculator-estimate.md) - Official AWS pricing calculations
+- [**CloudFormation Infrastructure**](config/linknote-infrastructure.yaml) - Infrastructure as Code
 
-## 🛠️ Quick Start
+## 🎭 Demo Script
 
+### **5-Minute Interview Demonstration**
+1. **Setup** (30s): Show dual screens, explain live control concept
+2. **Baseline** (60s): Normal ferry operations, steady telemetry
+3. **Engine Demo** (90s): RPM override with immediate AWS response
+4. **Emergency** (90s): Fire alarm trigger with cascading alerts
+5. **Power Systems** (60s): Battery management and hybrid switching
+6. **Scalability** (30s): Path to 10,000 sensors across 50 vessels
+
+## 🎯 BC Ferries Interview Value
+
+### **Immediate Capabilities**
+✅ **HiveMQ Expertise**: Production broker configuration and administration  
+✅ **Maritime Domain**: Island Class vessel operational understanding  
+✅ **Security Implementation**: Zero trust with mTLS and continuous monitoring  
+✅ **Interactive Proof**: Live demonstration of working telemetry system  
+✅ **November Ready**: Deployment-ready architecture and timeline  
+
+### **Strategic Value**
+✅ **Fleet Scalability**: Template-driven approach for 50+ vessels  
+✅ **Cost Optimization**: Public sector budget-conscious design  
+✅ **Vendor Integration**: Seamless Damen Triton gateway compatibility  
+✅ **Innovation Platform**: Foundation for predictive maintenance and optimization  
+✅ **Knowledge Transfer**: Complete documentation and operational procedures  
+
+## 🚀 Getting Started
+
+### **Quick Demo Setup**
 ```bash
 # Clone repository
 git clone https://github.com/murr2k/linknote-aws-demos.git
 cd linknote-aws-demos
 
-# Local development
-cd website && python3 -m http.server 8000
+# Review implementation plan
+cat docs/complete-implementation-plan.md
 
-# Deploy (automatic via git push to main branch)
-git add . && git commit -m "Update" && git push
+# Check cost analysis
+cat docs/live-demo-cost-breakdown.md
+
+# Review interactive demo design
+cat docs/interactive-demo-architecture.md
 ```
 
-## 📋 Project Structure
+### **Production Deployment**
+```bash
+# Deploy AWS infrastructure
+cd config
+./deploy-stack.sh bc-ferries-production
 
+# Configure HiveMQ broker
+# Follow docs/complete-implementation-plan.md Phase 1
+
+# Deploy Fly.io simulator
+# Follow docs/complete-implementation-plan.md Phase 2
 ```
-linknote-aws-demos/
-├── website/              # Static website files  
-├── .github/workflows/    # GitHub Actions CI/CD pipeline
-├── docs/                 # Architecture documentation
-├── scripts/              # Deployment utilities
-└── README.md            # This portfolio overview
-```
-
-## 🎓 Skills Demonstrated
-
-### Cloud Architecture
-- **AWS Service Integration** - Cohesive multi-service architecture
-- **Scalability Planning** - Design for growth and traffic spikes
-- **High Availability** - Redundancy and failover strategies
-- **Global Distribution** - CDN optimization for worldwide users
-
-### Security Engineering  
-- **Enterprise Credential Management** - Secure secret storage and rotation
-- **Encryption Strategy** - Multi-layer security implementation
-- **Compliance Readiness** - Audit trails and governance frameworks
-- **Zero Trust Architecture** - Assume breach, verify everything
-
-### DevOps Excellence
-- **CI/CD Pipeline Design** - Automated testing and deployment
-- **Infrastructure as Code** - Reproducible and version-controlled infrastructure
-- **Monitoring Strategy** - Proactive alerting and performance tracking
-- **Cost Engineering** - Optimization without sacrificing performance
 
 ## 📞 Contact
 
 **Murray Kopit**  
 📧 murr2k@gmail.com  
 🔗 [GitHub Profile](https://github.com/murr2k)  
-🌐 [Live Demo](https://linknote.com)
+🌐 [AWS Portfolio](https://linknote.com)  
+
+**Interview Demonstration**: Ready for BC Ferries technical evaluation
 
 ---
 
-*This portfolio demonstrates production-ready AWS expertise suitable for enterprise cloud engineering roles.*
+## 🌟 Why This Approach Works
 
-**Built with ☁️ Amazon Web Services**
+### **Beyond Basic Requirements**
+While BC Ferries needs HiveMQ configuration and signal validation, this solution provides:
+- **Enterprise architecture** ready for fleet-wide deployment
+- **Interactive demonstration** proving technical capability
+- **Cost-effective approach** suitable for public sector budgets
+- **Scalable foundation** for long-term digital transformation
+
+### **Interview Differentiation** 
+Most candidates will present PowerPoint slides or static demos. This provides:
+- **Live working system** with real-time interaction
+- **Technical depth** beyond theoretical knowledge  
+- **Maritime expertise** specific to Island Class vessels
+- **Production readiness** for immediate November deployment
+
+**Result**: Demonstrates not just knowledge, but proven capability to deliver enterprise maritime telemetry solutions.
+
+---
+
+*This project showcases the exact technical expertise BC Ferries needs for their Island Class vessel project, enhanced with interactive demonstration capabilities that prove real-world system building experience.*
