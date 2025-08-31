@@ -2,16 +2,28 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const mqtt = require('mqtt');
 const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const MQTTClient = require('./lib/mqtt-client');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"], // Allow inline scripts for dashboard
+      scriptSrcAttr: ["'unsafe-inline'"], // Allow onclick attributes
+      styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'", "wss:", "https:"], // Allow WebSocket connections
+      fontSrc: ["'self'", "https:", "data:"]
+    }
+  }
+}));
 app.use(cors());
 app.use(morgan('combined'));
 app.use(express.json());
@@ -48,20 +60,17 @@ const vesselState = {
   }
 };
 
-// MQTT Configuration for HiveMQ Cloud
-const mqttClient = mqtt.connect('mqtts://cluster-url.hivemq.cloud:8883', {
-  clientId: `bc-ferries-simulator-${uuidv4()}`,
-  username: process.env.HIVEMQ_USERNAME || 'demo-user',
-  password: process.env.HIVEMQ_PASSWORD || 'demo-password',
-  rejectUnauthorized: true
+// Initialize MQTT client with proper configuration
+const mqttClient = new MQTTClient();
+
+// Set up MQTT event handlers
+mqttClient.on('control', (controlData) => {
+  console.log('🎛️ Received control command:', controlData);
+  handleMQTTControlCommand(controlData);
 });
 
-mqttClient.on('connect', () => {
-  console.log('🚢 Connected to HiveMQ Cloud MQTT broker');
-});
-
-mqttClient.on('error', (error) => {
-  console.error('MQTT connection error:', error);
+mqttClient.on('status', (statusData) => {
+  console.log('📊 Received status update:', statusData);
 });
 
 // WebSocket server for real-time updates
@@ -80,6 +89,32 @@ wss.on('connection', (ws) => {
     data: vesselState
   }));
 
+  // Handle incoming messages
+  ws.on('message', (data) => {
+    try {
+      const message = JSON.parse(data.toString());
+      
+      switch (message.type) {
+        case 'ping':
+          // Respond to heartbeat ping
+          ws.send(JSON.stringify({ type: 'pong' }));
+          break;
+        case 'acknowledge_fire_alarm':
+          // Handle fire alarm acknowledgment from ops dashboard
+          console.log('🔥 Fire alarm acknowledgment received from ops dashboard');
+          vesselState.safety.fireAlarm = false;
+          vesselState.timestamp = new Date().toISOString();
+          publishTelemetry();
+          updateVesselStatusMQTT();
+          break;
+        default:
+          console.log('Unknown message type:', message.type);
+      }
+    } catch (error) {
+      console.error('Error parsing WebSocket message:', error);
+    }
+  });
+
   ws.on('close', () => {
     clients.delete(ws);
     console.log(`📡 Client disconnected. Total clients: ${clients.size}`);
@@ -96,7 +131,7 @@ function broadcast(data) {
   });
 }
 
-// Publish telemetry to MQTT
+// Publish telemetry to MQTT with error handling
 function publishTelemetry() {
   const telemetryPayload = {
     ...vesselState,
@@ -104,39 +139,76 @@ function publishTelemetry() {
     messageId: uuidv4()
   };
 
-  // Publish to HiveMQ Cloud
-  const topic = `fleet/bcferries/${vesselState.vesselId}/telemetry`;
-  mqttClient.publish(topic, JSON.stringify(telemetryPayload), {
-    qos: 1,
-    retain: false
-  });
+  // Publish to HiveMQ Cloud using enhanced client
+  mqttClient.publishTelemetry(vesselState.vesselId, telemetryPayload)
+    .then((result) => {
+      if (result.buffered) {
+        console.log('📦 Telemetry buffered (MQTT disconnected)');
+      } else {
+        console.log('📡 Telemetry published successfully');
+      }
+    })
+    .catch((error) => {
+      console.error('❌ Failed to publish telemetry:', error.message);
+    });
 
   // Broadcast to WebSocket clients
   broadcast({
     type: 'telemetry_update',
     data: telemetryPayload
   });
+
+  // Update vessel status
+  mqttClient.publishStatus(vesselState.vesselId, 'operational', {
+    status: determineVesselOperationalStatus(),
+    lastTelemetry: telemetryPayload.timestamp,
+    systems: {
+      engine: vesselState.engine.rpm > 0 ? 'running' : 'idle',
+      power: vesselState.power.mode,
+      safety: vesselState.safety.fireAlarm ? 'alarm' : 'normal'
+    }
+  });
 }
 
 // API Routes
 
-// Health check
+// Health check with MQTT status
 app.get('/health', (req, res) => {
+  const mqttInfo = mqttClient.getConnectionInfo();
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     vesselId: vesselState.vesselId,
-    mqttConnected: mqttClient.connected
+    mqtt: {
+      connected: mqttInfo.connected,
+      broker: mqttInfo.broker,
+      clientId: mqttInfo.clientId,
+      reconnectAttempts: mqttInfo.reconnectAttempts,
+      bufferedMessages: mqttInfo.bufferedMessages,
+      lastHeartbeat: mqttInfo.lastHeartbeat
+    },
+    systems: {
+      engine: vesselState.engine.rpm > 0 ? 'operational' : 'idle',
+      power: vesselState.power.mode,
+      safety: vesselState.safety.fireAlarm ? 'emergency' : 'normal'
+    }
   });
 });
 
 app.get('/api/health', (req, res) => {
+  const mqttInfo = mqttClient.getConnectionInfo();
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     vessel: vesselState.vesselId,
-    mqtt: mqttClient.connected ? 'connected' : 'disconnected',
-    clients: clients.size
+    mqtt: {
+      status: mqttInfo.connected ? 'connected' : 'disconnected',
+      broker: mqttInfo.broker,
+      bufferedMessages: mqttInfo.bufferedMessages
+    },
+    clients: clients.size,
+    uptime: Math.floor(process.uptime()),
+    version: '1.2.0'
   });
 });
 
@@ -154,6 +226,7 @@ app.post('/api/override/engine/rpm', (req, res) => {
     vesselState.timestamp = new Date().toISOString();
     
     publishTelemetry();
+    updateVesselStatusMQTT();
     
     res.json({
       success: true,
@@ -175,6 +248,7 @@ app.post('/api/override/engine/temperature', (req, res) => {
     vesselState.timestamp = new Date().toISOString();
     
     publishTelemetry();
+    updateVesselStatusMQTT();
     
     res.json({
       success: true,
@@ -209,6 +283,7 @@ app.post('/api/override/power/battery', (req, res) => {
     
     vesselState.timestamp = new Date().toISOString();
     publishTelemetry();
+    updateVesselStatusMQTT();
     
     res.json({
       success: true,
@@ -229,22 +304,20 @@ app.post('/api/emergency/fire/trigger', (req, res) => {
   vesselState.engine.rpm = Math.max(600, vesselState.engine.rpm * 0.5); // Reduce power
   vesselState.timestamp = new Date().toISOString();
   
-  // Publish emergency message
+  // Publish emergency message using enhanced MQTT client
   const emergencyPayload = {
-    vesselId: vesselState.vesselId,
-    emergency: true,
-    type: 'fire_alarm',
     severity: 'critical',
-    timestamp: new Date().toISOString(),
     location: vesselState.location,
-    message: 'Fire alarm activated - engine power reduced'
+    message: 'Fire alarm activated - engine power reduced',
+    response: {
+      required: true,
+      estimated_eta: 900 // 15 minutes
+    }
   };
   
-  mqttClient.publish(
-    `fleet/bcferries/${vesselState.vesselId}/emergency/fire`,
-    JSON.stringify(emergencyPayload),
-    { qos: 2 }
-  );
+  mqttClient.publishEmergency(vesselState.vesselId, 'fire', emergencyPayload)
+    .then(() => console.log('🆘 Emergency alert published successfully'))
+    .catch(error => console.error('❌ Failed to publish emergency:', error.message));
   
   publishTelemetry();
   
@@ -280,6 +353,7 @@ app.post('/api/override/safety/bilge', (req, res) => {
     vesselState.timestamp = new Date().toISOString();
     
     publishTelemetry();
+    updateVesselStatusMQTT();
     
     res.json({
       success: true,
@@ -309,10 +383,131 @@ server.listen(PORT, () => {
   console.log(`🔧 Control API available at http://localhost:${PORT}/api/`);
 });
 
+// Add helper functions
+function determineVesselOperationalStatus() {
+  if (vesselState.safety.fireAlarm) return 'emergency';
+  if (vesselState.engine.temperature > 100) return 'critical';
+  if (vesselState.power.batterySOC < 20) return 'warning';
+  if (vesselState.engine.rpm > 0) return 'underway';
+  return 'docked';
+}
+
+function updateVesselStatusMQTT() {
+  const status = {
+    operational: determineVesselOperationalStatus(),
+    systems: {
+      engine: {
+        status: vesselState.engine.rpm > 0 ? 'running' : 'idle',
+        temperature: vesselState.engine.temperature,
+        health: vesselState.engine.temperature > 95 ? 'warning' : 'good'
+      },
+      power: {
+        mode: vesselState.power.mode,
+        batteryLevel: vesselState.power.batterySOC,
+        health: vesselState.power.batterySOC < 25 ? 'low' : 'good'
+      },
+      safety: {
+        status: vesselState.safety.fireAlarm ? 'alarm' : 'normal',
+        bilgeLevel: vesselState.safety.bilgeLevel
+      }
+    },
+    location: vesselState.location,
+    route: vesselState.navigation.route
+  };
+  
+  mqttClient.publishStatus(vesselState.vesselId, 'systems', status)
+    .catch(error => console.error('Failed to publish status:', error.message));
+}
+
+function handleMQTTControlCommand(controlData) {
+  const { vesselId, system, action, payload } = controlData;
+  
+  console.log(`🎛️ Processing control command: ${system}/${action} for ${vesselId}`);
+  
+  // Route to appropriate handler based on system
+  switch (system) {
+    case 'engine':
+      handleEngineCommand(action, payload);
+      break;
+    case 'power':
+      handlePowerCommand(action, payload);
+      break;
+    case 'safety':
+      handleSafetyCommand(action, payload);
+      break;
+    default:
+      console.log(`⚠️ Unknown system: ${system}`);
+  }
+}
+
+function handleEngineCommand(action, payload) {
+  switch (action) {
+    case 'set_rpm':
+      if (payload.value >= 0 && payload.value <= 2000) {
+        vesselState.engine.rpm = payload.value;
+        vesselState.engine.fuelFlow = Math.max(50, payload.value * 0.15);
+        publishTelemetry();
+      }
+      break;
+    case 'emergency_stop':
+      vesselState.engine.rpm = 0;
+      vesselState.engine.fuelFlow = 0;
+      publishTelemetry();
+      break;
+  }
+}
+
+function handlePowerCommand(action, payload) {
+  switch (action) {
+    case 'set_mode':
+      if (['electric', 'hybrid', 'diesel'].includes(payload.mode)) {
+        vesselState.power.mode = payload.mode;
+        publishTelemetry();
+      }
+      break;
+  }
+}
+
+function handleSafetyCommand(action, payload) {
+  switch (action) {
+    case 'acknowledge_alarm':
+      vesselState.safety.fireAlarm = false;
+      publishTelemetry();
+      break;
+  }
+}
+
+// Subscribe to control topics
+function subscribeToControlTopics() {
+  const vesselId = vesselState.vesselId;
+  const topics = [
+    `fleet/bcferries/${vesselId}/control/+/+`,
+    `fleet/bcferries/${vesselId}/command/+`
+  ];
+  
+  topics.forEach(topic => {
+    mqttClient.subscribe(topic, 1)
+      .then(() => console.log(`✅ Subscribed to control topic: ${topic}`))
+      .catch(error => console.error(`❌ Failed to subscribe to ${topic}:`, error.message));
+  });
+}
+
+// Initialize control topic subscriptions
+setTimeout(subscribeToControlTopics, 2000); // Wait for MQTT connection
+
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('Shutting down gracefully...');
-  mqttClient.end();
+  mqttClient.disconnect();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('\nReceived SIGINT. Shutting down gracefully...');
+  mqttClient.disconnect();
   server.close(() => {
     console.log('Server closed');
     process.exit(0);
