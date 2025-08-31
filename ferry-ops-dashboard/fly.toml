@@ -1,0 +1,37 @@
+app = "bc-ferries-ops-dashboard"
+primary_region = "sea"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  FERRY_CONTROL_API = "https://ferry.linknote.com"
+  FERRY_CONTROL_WS = "wss://ferry.linknote.com"
+
+[http_service]
+  internal_port = 8081
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[processes]
+  app = "node server.js"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512
+
+[[statics]]
+  guest_path = "/app/public"
+  url_prefix = "/static/"

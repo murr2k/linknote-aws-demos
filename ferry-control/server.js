@@ -29,6 +29,9 @@ app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.static('public'));
 
+// Active alerts tracking for idempotency
+const activeAlerts = new Map(); // alertType -> alertData
+
 // Vessel simulation state
 const vesselState = {
   vesselId: 'island-class-001',
@@ -102,6 +105,13 @@ wss.on('connection', (ws) => {
         case 'acknowledge_fire_alarm':
           // Handle fire alarm acknowledgment from ops dashboard
           console.log('🔥 Fire alarm acknowledgment received from ops dashboard');
+          
+          // Clear from active alerts
+          const alertKey = 'fire_alarm';
+          if (activeAlerts.has(alertKey)) {
+            activeAlerts.delete(alertKey);
+          }
+          
           vesselState.safety.fireAlarm = false;
           vesselState.timestamp = new Date().toISOString();
           publishTelemetry();
@@ -300,20 +310,39 @@ app.post('/api/override/power/battery', (req, res) => {
 
 // Safety System Controls
 app.post('/api/emergency/fire/trigger', (req, res) => {
+  // Check if fire alarm is already active (idempotent)
+  const alertKey = 'fire_alarm';
+  if (activeAlerts.has(alertKey)) {
+    console.log('🔥 Fire alarm already active - ignoring duplicate trigger');
+    return res.json({
+      success: true,
+      message: 'Fire alarm already active',
+      vesselState,
+      duplicate: true
+    });
+  }
+  
   vesselState.safety.fireAlarm = true;
   vesselState.engine.rpm = Math.max(600, vesselState.engine.rpm * 0.5); // Reduce power
   vesselState.timestamp = new Date().toISOString();
   
-  // Publish emergency message using enhanced MQTT client
+  // Create emergency payload with unique ID
   const emergencyPayload = {
+    id: `${vesselState.vesselId}_fire_${Date.now()}`,
+    vesselId: vesselState.vesselId,
+    alertType: 'fire',
     severity: 'critical',
     location: vesselState.location,
     message: 'Fire alarm activated - engine power reduced',
+    timestamp: vesselState.timestamp,
     response: {
       required: true,
       estimated_eta: 900 // 15 minutes
     }
   };
+  
+  // Track this alert as active
+  activeAlerts.set(alertKey, emergencyPayload);
   
   mqttClient.publishEmergency(vesselState.vesselId, 'fire', emergencyPayload)
     .then(() => console.log('🆘 Emergency alert published successfully'))
@@ -334,10 +363,28 @@ app.post('/api/emergency/fire/trigger', (req, res) => {
 });
 
 app.post('/api/emergency/fire/acknowledge', (req, res) => {
+  const alertKey = 'fire_alarm';
+  
+  // Remove from active alerts
+  if (activeAlerts.has(alertKey)) {
+    activeAlerts.delete(alertKey);
+    console.log('🔥 Fire alarm alert cleared from active alerts');
+  }
+  
   vesselState.safety.fireAlarm = false;
   vesselState.timestamp = new Date().toISOString();
   
   publishTelemetry();
+  
+  // Broadcast acknowledgment
+  broadcast({
+    type: 'alert_acknowledged',
+    data: {
+      alertType: 'fire',
+      vesselId: vesselState.vesselId,
+      timestamp: vesselState.timestamp
+    }
+  });
   
   res.json({
     success: true,

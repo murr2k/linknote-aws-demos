@@ -1,0 +1,18 @@
+{
+  "name": "bc-ferries-deployment-tests",
+  "version": "1.0.0",
+  "description": "Playwright tests for BC Ferries dual dashboard deployment",
+  "scripts": {
+    "test": "playwright test",
+    "test:deployment": "playwright test tests/deployment-test.spec.js",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "install:playwright": "playwright install"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

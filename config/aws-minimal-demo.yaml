@@ -1,0 +1,206 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'BC Ferries Minimal Demo - Core Services Only'
+
+Parameters:
+  WorkspaceName:
+    Type: String
+    Default: bc-ferries-demo
+    Description: Name for the demo workspace
+
+Resources:
+  # CloudWatch Log Group for Maritime Telemetry
+  BCFerriesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/bc-ferries/maritime-telemetry-${AWS::StackName}'
+      RetentionInDays: 7
+      
+  # SNS Topic for Alerts
+  BCFerriesAlertsopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'bc-ferries-alerts-${AWS::StackName}'
+      DisplayName: BC Ferries Maritime Alerts
+      
+  # IoT Core Policy for Ferry Devices
+  BCFerriesIoTPolicy:
+    Type: AWS::IoT::Policy
+    Properties:
+      PolicyName: !Sub 'BCFerriesFleetPolicy-${AWS::StackName}'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - iot:Connect
+              - iot:Publish
+              - iot:Subscribe
+              - iot:Receive
+            Resource:
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/bc-ferries-*'
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/fleet/bcferries/*'
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/fleet/bcferries/*'
+
+  # IoT Rule to route telemetry to CloudWatch Logs
+  BCFerriesTelemetryRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: !Sub 'BCFerriesTelemetryToLogs'
+      TopicRulePayload:
+        Sql: "SELECT *, topic() as topic, timestamp() as aws_timestamp FROM 'fleet/bcferries/+/telemetry'"
+        Actions:
+          - CloudwatchLogs:
+              LogGroupName: !Ref BCFerriesLogGroup
+              RoleArn: !GetAtt IoTLogsRole.Arn
+              
+  # IoT Rule for Emergency Alerts
+  BCFerriesEmergencyRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: !Sub 'BCFerriesEmergencyAlerts'
+      TopicRulePayload:
+        Sql: "SELECT * FROM 'fleet/bcferries/+/emergency/+' WHERE emergency = true"
+        Actions:
+          - Sns:
+              TargetArn: !Ref BCFerriesAlertsopic
+              RoleArn: !GetAtt IoTSNSRole.Arn
+              MessageFormat: JSON
+
+  # IAM Role for CloudWatch Logs writes
+  IoTLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'BC-Ferries-IoT-Logs-Role-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: iot.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt BCFerriesLogGroup.Arn
+
+  # IAM Role for SNS alerts
+  IoTSNSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'BC-Ferries-IoT-SNS-Role-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: iot.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SNSPublishAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref BCFerriesAlertsopic
+
+  # Lambda function for basic telemetry processing
+  BCFerriesTelemetryProcessor:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'bc-ferries-telemetry-${AWS::StackName}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt BCFerriesLambdaRole.Arn
+      Environment:
+        Variables:
+          LOG_GROUP: !Ref BCFerriesLogGroup
+          SNS_TOPIC: !Ref BCFerriesAlertsopic
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          
+          def lambda_handler(event, context):
+              print(f"Processing telemetry: {json.dumps(event)}")
+              
+              # Basic telemetry processing
+              vessel_id = event.get('vessel_id', 'unknown')
+              timestamp = event.get('timestamp', 'unknown')
+              sensors = event.get('sensors', {})
+              
+              # Log processing result
+              print(f"Processed {len(sensors)} sensors for vessel {vessel_id}")
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps(f'Processed telemetry for vessel {vessel_id}')
+              }
+
+  # IAM Role for Lambda
+  BCFerriesLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'BC-Ferries-Lambda-Role-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  # Lambda permission for IoT Core
+  BCFerriesLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BCFerriesTelemetryProcessor
+      Action: lambda:InvokeFunction
+      Principal: iot.amazonaws.com
+      SourceArn: !GetAtt BCFerriesTelemetryRule.Arn
+
+Outputs:
+  CloudWatchLogGroup:
+    Description: 'CloudWatch Log Group for maritime telemetry'
+    Value: !Ref BCFerriesLogGroup
+    Export:
+      Name: !Sub 'BC-Ferries-CloudWatch-Logs-${AWS::StackName}'
+      
+  SNSAlertsopic:
+    Description: 'SNS Topic for maritime alerts'
+    Value: !Ref BCFerriesAlertsopic
+    Export:
+      Name: !Sub 'BC-Ferries-SNS-Alerts-${AWS::StackName}'
+      
+  LambdaFunction:
+    Description: 'Lambda function for telemetry processing'
+    Value: !Ref BCFerriesTelemetryProcessor
+    Export:
+      Name: !Sub 'BC-Ferries-Lambda-${AWS::StackName}'
+      
+  IoTPolicyName:
+    Description: 'IoT Policy for BC Ferries devices'
+    Value: !Ref BCFerriesIoTPolicy
+    Export:
+      Name: !Sub 'BC-Ferries-IoT-Policy-${AWS::StackName}'

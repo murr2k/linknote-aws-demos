@@ -1,0 +1,369 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'BC Ferries Enterprise Monitoring - TimeStream for InfluxDB + AWS Managed Grafana'
+
+Parameters:
+  WorkspaceName:
+    Type: String
+    Default: bc-ferries-enterprise
+    Description: Name for the Grafana workspace
+    
+  CustomDomain:
+    Type: String
+    Default: ops.linknote.com
+    Description: Custom domain for the Grafana workspace
+
+Resources:
+  # IAM Role for Grafana Service
+  GrafanaServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'BC-Ferries-Grafana-Service-Role-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: grafana.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonGrafanaCloudWatchPolicy
+      Policies:
+        - PolicyName: TimestreamAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - timestream:*
+                Resource: '*'
+  # TimeStream for InfluxDB Database
+  BCFerriesInfluxDatabase:
+    Type: AWS::Timestream::InfluxDBInstance
+    Properties:
+      Name: !Sub 'bc-ferries-${AWS::StackName}'
+      AllocatedStorage: 20
+      DbInstanceType: db.influx.medium
+      DbStorageType: InfluxIOIncludedT1
+      DeploymentType: WITH_MULTIAZ_STANDBY
+      Bucket: maritime-telemetry
+      Organization: bc-ferries
+      Username: admin
+      Password: !Sub '{{resolve:secretsmanager:${BCFerriesInfluxSecret}:SecretString:password}}'
+      LogDeliveryConfiguration:
+        S3Configuration:
+          BucketName: !Ref BCFerriesLogsBucket
+          Enabled: true
+      PubliclyAccessible: false
+      VpcSecurityGroupIds:
+        - !Ref BCFerriesInfluxSecurityGroup
+      VpcSubnetIds:
+        - !Ref BCFerriesPrivateSubnet1
+        - !Ref BCFerriesPrivateSubnet2
+
+  # Secrets Manager for InfluxDB credentials
+  BCFerriesInfluxSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'bc-ferries-influx-${AWS::StackName}'
+      Description: InfluxDB credentials for BC Ferries maritime telemetry
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
+  # VPC for InfluxDB
+  BCFerriesVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'BC-Ferries-VPC-${AWS::StackName}'
+
+  # Private Subnets
+  BCFerriesPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref BCFerriesVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'BC-Ferries-Private-1-${AWS::StackName}'
+
+  BCFerriesPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref BCFerriesVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'BC-Ferries-Private-2-${AWS::StackName}'
+
+
+  # Security Group for InfluxDB
+  BCFerriesInfluxSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: BC Ferries InfluxDB security group
+      VpcId: !Ref BCFerriesVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8086
+          ToPort: 8086
+          CidrIp: 10.0.0.0/16
+          Description: InfluxDB access from VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'BC-Ferries-InfluxDB-SG-${AWS::StackName}'
+
+  # Security Group for Lambda functions
+  BCFerriesLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: BC Ferries Lambda functions security group
+      VpcId: !Ref BCFerriesVPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 8086
+          ToPort: 8086
+          CidrIp: 10.0.0.0/16
+          Description: InfluxDB access
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS outbound
+      Tags:
+        - Key: Name
+          Value: !Sub 'BC-Ferries-Lambda-SG-${AWS::StackName}'
+
+  # S3 Bucket for logs
+  BCFerriesLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'bc-ferries-logs-${AWS::StackName}-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # AWS Managed Grafana Workspace
+  BCFerriesGrafanaWorkspace:
+    Type: AWS::Grafana::Workspace
+    Properties:
+      Name: !Ref WorkspaceName
+      Description: 'BC Ferries Fleet Enterprise Monitoring Dashboard'
+      AccountAccessType: CURRENT_ACCOUNT
+      AuthenticationProviders:
+        - AWS_SSO
+      DataSources:
+        - CLOUDWATCH
+        - TIMESTREAM
+      NotificationDestinations:
+        - SNS
+      PermissionType: SERVICE_MANAGED
+      RoleArn: !GetAtt GrafanaServiceRole.Arn
+      StackSetName: !Sub 'grafana-${AWS::StackName}'
+
+  # Lambda function for telemetry processing
+  BCFerriesTelemetryProcessor:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'bc-ferries-telemetry-${AWS::StackName}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt BCFerriesLambdaRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref BCFerriesLambdaSecurityGroup
+        SubnetIds:
+          - !Ref BCFerriesPrivateSubnet1
+          - !Ref BCFerriesPrivateSubnet2
+      Environment:
+        Variables:
+          INFLUXDB_ENDPOINT: !GetAtt BCFerriesInfluxDatabase.Endpoint
+          INFLUXDB_DATABASE: 'maritime_telemetry'
+      Code:
+        ZipFile: |
+          import json
+          import os
+          from influxdb_client import InfluxDBClient, Point
+          from influxdb_client.client.write_api import SYNCHRONOUS
+          
+          def lambda_handler(event, context):
+              # Parse IoT Core message
+              vessel_id = event['vessel_id']
+              timestamp = event['timestamp']
+              sensors = event['sensors']
+              
+              # InfluxDB connection
+              endpoint = os.environ['INFLUXDB_ENDPOINT']
+              client = InfluxDBClient(url=f"https://{endpoint}:8086")
+              write_api = client.write_api(write_options=SYNCHRONOUS)
+              
+              # Create points for each sensor
+              points = []
+              for sensor_type, readings in sensors.items():
+                  for sensor_id, value in readings.items():
+                      point = Point("maritime_telemetry") \
+                          .tag("vessel_id", vessel_id) \
+                          .tag("sensor_type", sensor_type) \
+                          .tag("sensor_id", sensor_id) \
+                          .field("value", value) \
+                          .time(timestamp)
+                      points.append(point)
+              
+              # Write to InfluxDB
+              write_api.write(bucket="maritime", record=points)
+              client.close()
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps(f'Processed {len(points)} sensor readings')
+              }
+
+  # IAM Role for Lambda
+  BCFerriesLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'BC-Ferries-Lambda-Role-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: InfluxDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - timestream:*
+                Resource: !Sub 'arn:aws:timestream:${AWS::Region}:${AWS::AccountId}:database/*'
+
+  # SNS Topic for Alerts
+  BCFerriesAlertsopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'bc-ferries-alerts-${AWS::StackName}'
+      DisplayName: BC Ferries Maritime Alerts
+      
+  # IoT Core Policy for Ferry Devices
+  BCFerriesIoTPolicy:
+    Type: AWS::IoT::Policy
+    Properties:
+      PolicyName: !Sub 'BCFerriesFleetPolicy-${AWS::StackName}'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - iot:Connect
+              - iot:Publish
+              - iot:Subscribe
+              - iot:Receive
+            Resource:
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/bc-ferries-*'
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/fleet/bcferries/*'
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/fleet/bcferries/*'
+
+  # IoT Rule to route telemetry to Lambda
+  BCFerriesTelemetryRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: !Sub 'BCFerriesTelemetryToInflux${AWS::StackName}'
+      TopicRulePayload:
+        Sql: "SELECT *, topic() as topic, timestamp() as aws_timestamp FROM 'fleet/bcferries/+/telemetry'"
+        Actions:
+          - Lambda:
+              FunctionArn: !GetAtt BCFerriesTelemetryProcessor.Arn
+              
+  # IoT Rule for Emergency Alerts
+  BCFerriesEmergencyRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: !Sub 'BCFerriesEmergencyAlerts${AWS::StackName}'
+      TopicRulePayload:
+        Sql: "SELECT * FROM 'fleet/bcferries/+/emergency/+' WHERE emergency = true"
+        Actions:
+          - Sns:
+              TargetArn: !Ref BCFerriesAlertsopic
+              RoleArn: !GetAtt IoTSNSRole.Arn
+              MessageFormat: JSON
+
+  # Lambda permission for IoT Core
+  BCFerriesLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BCFerriesTelemetryProcessor
+      Action: lambda:InvokeFunction
+      Principal: iot.amazonaws.com
+      SourceArn: !GetAtt BCFerriesTelemetryRule.Arn
+
+  # IAM Role for SNS alerts
+  IoTSNSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'BC-Ferries-IoT-SNS-Role-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: iot.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SNSPublishAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref BCFerriesAlertsopic
+
+Outputs:
+  GrafanaWorkspaceId:
+    Description: 'AWS Managed Grafana Workspace ID'
+    Value: !Ref BCFerriesGrafanaWorkspace
+    Export:
+      Name: !Sub 'BC-Ferries-Grafana-Workspace-ID-${AWS::StackName}'
+      
+  GrafanaWorkspaceEndpoint:
+    Description: 'Grafana Workspace Endpoint for ops.linknote.com'
+    Value: !GetAtt BCFerriesGrafanaWorkspace.Endpoint
+    Export:
+      Name: !Sub 'BC-Ferries-Grafana-Endpoint-${AWS::StackName}'
+      
+  InfluxDBEndpoint:
+    Description: 'TimeStream for InfluxDB endpoint'
+    Value: !GetAtt BCFerriesInfluxDatabase.Endpoint
+    Export:
+      Name: !Sub 'BC-Ferries-InfluxDB-Endpoint-${AWS::StackName}'
+      
+  SNSAlertsopic:
+    Description: 'SNS Topic for maritime alerts'
+    Value: !Ref BCFerriesAlertsopic
+    Export:
+      Name: !Sub 'BC-Ferries-SNS-Alerts-${AWS::StackName}'
+
+  VPCId:
+    Description: 'VPC ID for InfluxDB deployment'
+    Value: !Ref BCFerriesVPC
+    Export:
+      Name: !Sub 'BC-Ferries-VPC-${AWS::StackName}'

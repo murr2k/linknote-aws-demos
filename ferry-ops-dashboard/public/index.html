@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BC Ferries Operations Center - Maritime Monitoring Dashboard</title>
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+</head>
+<body class="ops-dashboard">
+    <!-- Header Bar -->
+    <header class="ops-header">
+        <div class="header-left">
+            <div class="logo">
+                <i class="fas fa-ship"></i>
+                <span>BC Ferries Operations Center</span>
+            </div>
+            <div class="connection-status" id="connectionStatus">
+                <i class="fas fa-circle" id="statusIndicator"></i>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </div>
+        
+        <div class="header-center">
+            <div class="current-time">
+                <div id="currentTime"></div>
+                <div id="currentDate"></div>
+            </div>
+        </div>
+        
+        <div class="header-right">
+            <div class="weather-summary" id="weatherSummary">
+                <i class="fas fa-cloud-sun"></i>
+                <span id="weatherText">Loading...</span>
+            </div>
+            <div class="alert-summary" id="alertSummary">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span id="alertCount">0 Alerts</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard Grid -->
+    <main class="dashboard-grid">
+        <!-- Fleet Overview Panel -->
+        <section class="panel fleet-overview">
+            <div class="panel-header">
+                <h2><i class="fas fa-ship"></i> Fleet Status</h2>
+                <div class="panel-controls">
+                    <button class="btn-icon" onclick="refreshFleetData()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div class="fleet-stats">
+                    <div class="stat-card operational">
+                        <div class="stat-number" id="operationalVessels">0</div>
+                        <div class="stat-label">Operational</div>
+                    </div>
+                    <div class="stat-card maintenance">
+                        <div class="stat-number" id="maintenanceVessels">0</div>
+                        <div class="stat-label">Maintenance</div>
+                    </div>
+                    <div class="stat-card emergency">
+                        <div class="stat-number" id="emergencyVessels">0</div>
+                        <div class="stat-label">Emergency</div>
+                    </div>
+                </div>
+                <div class="vessel-list" id="vesselList">
+                    <!-- Vessels will be populated dynamically -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Selected Vessel Detail -->
+        <section class="panel vessel-detail">
+            <div class="panel-header">
+                <h2><i class="fas fa-info-circle"></i> Vessel Detail</h2>
+                <div class="vessel-selector">
+                    <select id="vesselSelect">
+                        <option value="">Select Vessel...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="panel-content" id="vesselDetailContent">
+                <div class="no-selection">
+                    <i class="fas fa-ship fa-3x"></i>
+                    <p>Select a vessel to view detailed telemetry</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Engine Performance Gauges -->
+        <section class="panel engine-gauges">
+            <div class="panel-header">
+                <h2><i class="fas fa-tachometer-alt"></i> Engine Performance</h2>
+            </div>
+            <div class="panel-content">
+                <div class="gauge-container">
+                    <div class="gauge-wrapper">
+                        <canvas id="rpmGauge" width="200" height="200"></canvas>
+                        <div class="gauge-label">Engine RPM</div>
+                        <div class="gauge-value" id="rpmValue">-- RPM</div>
+                    </div>
+                    <div class="gauge-wrapper">
+                        <canvas id="tempGauge" width="200" height="200"></canvas>
+                        <div class="gauge-label">Temperature</div>
+                        <div class="gauge-value" id="tempValue">-- °C</div>
+                    </div>
+                    <div class="gauge-wrapper">
+                        <canvas id="fuelGauge" width="200" height="200"></canvas>
+                        <div class="gauge-label">Fuel Flow</div>
+                        <div class="gauge-value" id="fuelValue">-- L/h</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Power Systems -->
+        <section class="panel power-systems">
+            <div class="panel-header">
+                <h2><i class="fas fa-battery-three-quarters"></i> Power Systems</h2>
+            </div>
+            <div class="panel-content">
+                <div class="power-grid">
+                    <div class="power-item">
+                        <div class="power-label">Battery SOC</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="batteryProgress"></div>
+                            <div class="progress-text" id="batteryText">-- %</div>
+                        </div>
+                    </div>
+                    <div class="power-item">
+                        <div class="power-label">Generator Load</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="generatorProgress"></div>
+                            <div class="progress-text" id="generatorText">-- %</div>
+                        </div>
+                    </div>
+                    <div class="power-item">
+                        <div class="power-label">Power Mode</div>
+                        <div class="power-mode" id="powerMode">--</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Safety Systems -->
+        <section class="panel safety-systems">
+            <div class="panel-header">
+                <h2><i class="fas fa-shield-alt"></i> Safety Systems</h2>
+            </div>
+            <div class="panel-content">
+                <div class="safety-grid">
+                    <div class="safety-item">
+                        <div class="safety-icon" id="fireIcon">
+                            <i class="fas fa-fire"></i>
+                        </div>
+                        <div class="safety-label">Fire Alarm</div>
+                        <div class="safety-status" id="fireStatus">NORMAL</div>
+                    </div>
+                    <div class="safety-item">
+                        <div class="safety-icon" id="bilgeIcon">
+                            <i class="fas fa-water"></i>
+                        </div>
+                        <div class="safety-label">Bilge Level</div>
+                        <div class="safety-status" id="bilgeStatus">-- cm</div>
+                    </div>
+                    <div class="safety-item">
+                        <div class="safety-icon" id="co2Icon">
+                            <i class="fas fa-lungs"></i>
+                        </div>
+                        <div class="safety-label">CO2 Level</div>
+                        <div class="safety-status" id="co2Status">-- ppm</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Navigation Display -->
+        <section class="panel navigation-display">
+            <div class="panel-header">
+                <h2><i class="fas fa-compass"></i> Navigation</h2>
+            </div>
+            <div class="panel-content">
+                <div class="nav-grid">
+                    <div class="nav-item">
+                        <div class="nav-label">Current Speed</div>
+                        <div class="nav-value" id="speedValue">-- kts</div>
+                    </div>
+                    <div class="nav-item">
+                        <div class="nav-label">Heading</div>
+                        <div class="nav-value" id="headingValue">-- °</div>
+                    </div>
+                    <div class="nav-item">
+                        <div class="nav-label">Route</div>
+                        <div class="nav-value" id="routeValue">--</div>
+                    </div>
+                    <div class="nav-item">
+                        <div class="nav-label">Next Waypoint</div>
+                        <div class="nav-value" id="waypointValue">--</div>
+                    </div>
+                    <div class="nav-item">
+                        <div class="nav-label">Position</div>
+                        <div class="nav-value" id="positionValue">-- °N, -- °W</div>
+                    </div>
+                </div>
+                <div class="compass-display" id="compassDisplay">
+                    <div class="compass-face">
+                        <div class="compass-needle" id="compassNeedle"></div>
+                        <div class="compass-labels">
+                            <span class="compass-n">N</span>
+                            <span class="compass-e">E</span>
+                            <span class="compass-s">S</span>
+                            <span class="compass-w">W</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Historical Charts -->
+        <section class="panel historical-charts">
+            <div class="panel-header">
+                <h2><i class="fas fa-chart-line"></i> Historical Data</h2>
+                <div class="panel-controls">
+                    <select id="chartMetric">
+                        <option value="fuel_efficiency">Fuel Efficiency</option>
+                        <option value="engine_temperature">Engine Temperature</option>
+                        <option value="battery_soc">Battery SOC</option>
+                        <option value="passenger_count">Passenger Count</option>
+                    </select>
+                    <select id="chartRange">
+                        <option value="24h">24 Hours</option>
+                        <option value="7d">7 Days</option>
+                        <option value="30d">30 Days</option>
+                    </select>
+                </div>
+            </div>
+            <div class="panel-content">
+                <canvas id="historicalChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Alerts Panel -->
+        <section class="panel alerts-panel">
+            <div class="panel-header">
+                <h2><i class="fas fa-bell"></i> Active Alerts</h2>
+                <div class="alert-filters">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="critical">Critical</button>
+                    <button class="filter-btn" data-filter="warning">Warning</button>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div class="alerts-list" id="alertsList">
+                    <!-- Alerts will be populated dynamically -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Weather and Environment -->
+        <section class="panel weather-environment">
+            <div class="panel-header">
+                <h2><i class="fas fa-cloud-sun"></i> Weather & Environment</h2>
+            </div>
+            <div class="panel-content">
+                <div class="weather-grid">
+                    <div class="weather-item">
+                        <div class="weather-icon">
+                            <i class="fas fa-wind"></i>
+                        </div>
+                        <div class="weather-label">Wind</div>
+                        <div class="weather-value" id="windValue">-- kts</div>
+                        <div class="weather-sub" id="windDirection">--</div>
+                    </div>
+                    <div class="weather-item">
+                        <div class="weather-icon">
+                            <i class="fas fa-water"></i>
+                        </div>
+                        <div class="weather-label">Wave Height</div>
+                        <div class="weather-value" id="waveValue">-- m</div>
+                    </div>
+                    <div class="weather-item">
+                        <div class="weather-icon">
+                            <i class="fas fa-eye"></i>
+                        </div>
+                        <div class="weather-label">Visibility</div>
+                        <div class="weather-value" id="visibilityValue">-- nm</div>
+                    </div>
+                    <div class="weather-item">
+                        <div class="weather-icon">
+                            <i class="fas fa-thermometer-half"></i>
+                        </div>
+                        <div class="weather-label">Temperature</div>
+                        <div class="weather-value" id="temperatureValue">-- °C</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Emergency Alert Modal -->
+    <div class="modal" id="emergencyModal">
+        <div class="modal-content emergency">
+            <div class="modal-header">
+                <h2><i class="fas fa-exclamation-triangle"></i> EMERGENCY ALERT</h2>
+            </div>
+            <div class="modal-body">
+                <div class="emergency-details" id="emergencyDetails">
+                    <!-- Emergency details will be populated -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="acknowledgeEmergency()">
+                    Acknowledge
+                </button>
+                <button class="btn btn-secondary" onclick="closeEmergencyModal()">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <i class="fas fa-ship fa-spin"></i>
+            <p>Connecting to Operations Center...</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/dashboard.js"></script>
+    <script src="js/gauges.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/websocket.js"></script>
+</body>
+</html>

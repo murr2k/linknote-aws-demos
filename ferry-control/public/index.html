@@ -279,7 +279,7 @@
 
     <script>
         // WebSocket connection for real-time updates
-        const ws = new WebSocket(window.location.protocol === 'https:' ? 'wss:' : 'ws:' + '//' + window.location.host);
+        const ws = new WebSocket((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host);
         let vesselState = {};
 
         ws.onopen = function() {
@@ -287,10 +287,13 @@
         };
 
         ws.onmessage = function(event) {
+            console.log('WebSocket received:', event.data);
             const message = JSON.parse(event.data);
+            console.log('Parsed message:', message);
             
             if (message.type === 'vessel_state' || message.type === 'telemetry_update') {
                 vesselState = message.data;
+                console.log('Updated vessel state:', vesselState);
                 updateUI();
                 logTelemetry(`Telemetry update: ${message.data.timestamp}`);
             } else if (message.type === 'emergency_alert') {
@@ -309,6 +312,7 @@
         }
 
         function updateUI() {
+            console.log('updateUI called with vessel state:', vesselState);
             // Update display values
             document.getElementById('rpmValue').textContent = vesselState.engine?.rpm || 0;
             document.getElementById('tempValue').textContent = vesselState.engine?.temperature || 0;
@@ -432,9 +436,39 @@
             sendControlCommand('/api/override/engine/rpm', { value: 600 });
             logTelemetry('🏁 Docking approach - reduced speed');
         }
+        
+        function testUI() {
+            console.log('Test UI button clicked');
+            logTelemetry('🔧 Manual UI test triggered');
+            
+            // Set test vessel state
+            vesselState = {
+                engine: { rpm: 1850, temperature: 92, fuelFlow: 277 },
+                power: { batterySOC: 68, mode: 'hybrid', generatorLoad: 55 },
+                safety: { bilgeLevel: 22, co2Level: 420, fireAlarm: false },
+                navigation: { speed: 14.2, route: 'TEST-MODE' },
+                location: { heading: 123 }
+            };
+            
+            console.log('Setting test vessel state:', vesselState);
+            updateUI();
+            logTelemetry('🔧 Test vessel state applied - check display values');
+        }
 
         // Initialize
+        console.log('Initializing BC Ferries Control Dashboard...');
         logTelemetry('BC Ferries Control Dashboard initialized');
+        
+        // Force initial UI update after 1 second
+        setTimeout(() => {
+            console.log('Forcing initial UI update...');
+            if (Object.keys(vesselState).length === 0) {
+                console.log('No vessel state received yet, vesselState is empty');
+            } else {
+                console.log('Vessel state exists, calling updateUI');
+                updateUI();
+            }
+        }, 1000);
     </script>
 </body>
 </html>

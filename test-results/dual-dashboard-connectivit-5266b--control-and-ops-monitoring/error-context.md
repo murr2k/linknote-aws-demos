@@ -1,0 +1,71 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]: ⛴️
+    - heading "BC Ferries - Interactive Vessel Control" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Island Class Ferry Telemetry Demonstration
+  - generic [ref=e6]:
+    - heading "🚢 Island Class 001" [level=2] [ref=e7]
+    - paragraph [ref=e8]:
+      - strong [ref=e9]: "Route:"
+      - generic [ref=e10]: SWB ↔ TSA
+      - text: "|"
+      - strong [ref=e11]: "Speed:"
+      - generic [ref=e12]: "12.5"
+      - text: knots |
+      - strong [ref=e13]: "Heading:"
+      - generic [ref=e14]: "045"
+      - text: °
+    - paragraph [ref=e15]:
+      - strong [ref=e16]: "Location:"
+      - generic [ref=e17]: 48.6569°N, 123.3933°W
+  - generic [ref=e18]:
+    - generic [ref=e19]:
+      - heading "🔧 Engine Systems" [level=3] [ref=e20]
+      - generic [ref=e21]:
+        - generic [ref=e22]: Engine RPM
+        - generic [ref=e23]: "1200"
+        - slider "Engine RPM" [ref=e24]: "1200"
+      - generic [ref=e25]:
+        - generic [ref=e26]: Engine Temperature (°C)
+        - generic [ref=e27]: "85"
+        - slider "Engine Temperature (°C)" [ref=e28]: "85"
+      - generic [ref=e29]:
+        - generic [ref=e30]: Fuel Flow
+        - generic [ref=e31]: 120 L/hr
+    - generic [ref=e32]:
+      - heading "⚡ Power Management" [level=3] [ref=e33]
+      - generic [ref=e34]:
+        - generic [ref=e35]: Battery State of Charge (%)
+        - generic [ref=e36]: "85"
+        - slider "Battery State of Charge (%)" [ref=e37]: "85"
+      - generic [ref=e38]:
+        - generic [ref=e39]: Power Mode
+        - generic [ref=e41]: HYBRID
+      - generic [ref=e42]:
+        - generic [ref=e43]: Generator Load
+        - generic [ref=e44]: 45%
+    - generic [ref=e45]:
+      - heading "🚨 Safety Systems" [level=3] [ref=e46]
+      - generic [ref=e47]:
+        - generic [ref=e48]: Fire Detection System
+        - button "🔥 Trigger Fire Alarm" [ref=e49] [cursor=pointer]
+      - generic [ref=e50]:
+        - generic [ref=e51]: Bilge Level (cm)
+        - generic [ref=e52]: "15"
+        - slider "Bilge Level (cm)" [ref=e53]: "15"
+      - generic [ref=e54]:
+        - generic [ref=e55]: CO₂ Level
+        - generic [ref=e56]: 400 ppm
+    - generic [ref=e57]:
+      - heading "⚠️ Demo Scenarios" [level=3] [ref=e58]
+      - button "🌊 Normal Operations" [ref=e59] [cursor=pointer]
+      - button "🌪️ Heavy Weather" [ref=e60] [cursor=pointer]
+      - button "🔋 Low Battery Alert" [ref=e61] [cursor=pointer]
+      - button "🏁 Docking Approach" [ref=e62] [cursor=pointer]
+  - paragraph [ref=e64]: 🔌 Connecting to vessel control systems...
+  - paragraph [ref=e66]:
+    - strong [ref=e67]: "Telemetry Stream:"
+```

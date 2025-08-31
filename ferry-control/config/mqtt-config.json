@@ -1,0 +1,123 @@
+{
+  "hivemq": {
+    "broker": {
+      "url": "HIVEMQ_CLUSTER_URL",
+      "port": 8883,
+      "protocol": "mqtts",
+      "secure": true
+    },
+    "authentication": {
+      "username": "HIVEMQ_USERNAME",
+      "password": "HIVEMQ_PASSWORD",
+      "clientIdPrefix": "bc-ferries"
+    },
+    "options": {
+      "keepalive": 60,
+      "clean": true,
+      "reconnectPeriod": 5000,
+      "connectTimeout": 30000,
+      "rejectUnauthorized": true,
+      "protocolVersion": 5,
+      "will": {
+        "topic": "fleet/bcferries/status/disconnect",
+        "payload": "Ferry control system disconnected",
+        "qos": 1,
+        "retain": false
+      }
+    }
+  },
+  "topics": {
+    "telemetry": {
+      "pattern": "fleet/bcferries/{vesselId}/telemetry",
+      "qos": 1,
+      "retain": false
+    },
+    "emergency": {
+      "pattern": "fleet/bcferries/{vesselId}/emergency/{type}",
+      "qos": 2,
+      "retain": false
+    },
+    "control": {
+      "pattern": "fleet/bcferries/{vesselId}/control/{system}/{action}",
+      "qos": 1,
+      "retain": false
+    },
+    "status": {
+      "pattern": "fleet/bcferries/{vesselId}/status/{component}",
+      "qos": 1,
+      "retain": true
+    },
+    "heartbeat": {
+      "pattern": "fleet/bcferries/{vesselId}/heartbeat",
+      "qos": 0,
+      "retain": false,
+      "interval": 30000
+    }
+  },
+  "messageFormats": {
+    "telemetry": {
+      "required": ["vesselId", "timestamp", "location", "engine", "power", "safety", "navigation"],
+      "schema": {
+        "vesselId": "string",
+        "timestamp": "ISO8601",
+        "messageId": "uuid",
+        "location": {
+          "latitude": "number",
+          "longitude": "number",
+          "heading": "number"
+        },
+        "engine": {
+          "rpm": "number",
+          "temperature": "number",
+          "fuelFlow": "number"
+        },
+        "power": {
+          "batterySOC": "number",
+          "mode": "string",
+          "generatorLoad": "number"
+        },
+        "safety": {
+          "fireAlarm": "boolean",
+          "bilgeLevel": "number",
+          "co2Level": "number"
+        },
+        "navigation": {
+          "speed": "number",
+          "route": "string",
+          "nextWaypoint": "string"
+        }
+      }
+    },
+    "emergency": {
+      "required": ["vesselId", "timestamp", "type", "severity", "location"],
+      "schema": {
+        "vesselId": "string",
+        "timestamp": "ISO8601",
+        "messageId": "uuid",
+        "emergency": "boolean",
+        "type": "string",
+        "severity": "string",
+        "message": "string",
+        "location": {
+          "latitude": "number",
+          "longitude": "number"
+        },
+        "response": {
+          "required": "boolean",
+          "estimated_eta": "number"
+        }
+      }
+    }
+  },
+  "quality": {
+    "maxRetries": 3,
+    "messageExpiry": 300,
+    "duplicateDetection": true,
+    "compressionEnabled": false
+  },
+  "logging": {
+    "level": "info",
+    "logMqttEvents": true,
+    "logPayloads": false
+  }
+}

@@ -28,12 +28,12 @@ graph TB
     subgraph "Cloud Infrastructure"
         HIVEMQ[HiveMQ Cloud<br/>Professional MQTT broker]
         IOT_CORE[AWS IoT Core<br/>Device gateway + rules]
-        TIMESTREAM[Amazon TimeStream<br/>Hot + cold storage]
+        TIMESTREAM[TimeStream for InfluxDB<br/>Time-series database]
         SECRETS[AWS Secrets Manager<br/>Certificate storage]
     end
     
     subgraph "Monitoring & Visualization"
-        GRAF_AWS[Grafana Cloud<br/>Fleet dashboards]
+        GRAF_AWS[AWS Managed Grafana<br/>Service-managed workspace]
         CW[CloudWatch<br/>Infrastructure monitoring]
         ALERTS[Alert Manager<br/>Notification system]
     end
@@ -66,8 +66,8 @@ sequenceDiagram
     participant S as Simulator
     participant M as MQTT Broker
     participant A as AWS IoT Core
-    participant T as TimeStream
-    participant G as Grafana AWS
+    participant T as TimeStream for InfluxDB
+    participant G as AWS Managed Grafana
     
     Note over P,G: Interactive Demo Sequence
     
@@ -117,9 +117,10 @@ sequenceDiagram
 
 ### **Scalable Dashboard Architecture**
 - **Template-Driven**: 4 dashboard levels instead of 10,000 individual panels
-- **Multi-Measure Records**: Efficient TimeStream storage with batched sensors
-- **Auto-Generation**: Infrastructure as Code with Terraform/CDK
+- **Multi-Measure Records**: Efficient TimeStream for InfluxDB storage with batched sensors
+- **Auto-Generation**: Infrastructure as Code with CloudFormation
 - **Variable Framework**: Dynamic filtering and drilling down capabilities
+- **Service-Managed Grafana**: AWS service-linked role with automatic permissions
 
 ## 🛠️ Complete Implementation Timeline
 
@@ -127,14 +128,14 @@ sequenceDiagram
 #### **Day 1: AWS Infrastructure**
 - [ ] **AWS Account Setup**: Create/configure AWS account with proper IAM roles
 - [ ] **IoT Core Configuration**: Device registry, certificates, policies, rules engine
-- [ ] **TimeStream Setup**: Database creation, retention policies, memory→magnetic tiering
+- [ ] **TimeStream for InfluxDB Setup**: InfluxDB instance creation, retention policies, database configuration
 - [ ] **Secrets Manager**: Certificate storage, API key management
 - [ ] **S3 Configuration**: Backup storage, lifecycle policies
 - [ ] **CloudWatch Setup**: Basic monitoring, log groups, metric filters
 
 #### **Day 2: External Services**
 - [ ] **HiveMQ Cloud**: Starter plan signup, broker configuration, TLS setup
-- [ ] **Grafana Cloud**: Account setup, data source configuration, workspace creation
+- [ ] **AWS Managed Grafana**: Workspace creation with service-managed permissions, data source configuration
 - [ ] **Fly.io Setup**: Account creation, CLI installation, initial app scaffolding
 - [ ] **Certificate Generation**: PKI setup, device certificates, CA chain
 - [ ] **Network Security**: VPC configuration, security groups, endpoints
@@ -157,13 +158,13 @@ sequenceDiagram
 ### **Phase 3: AWS Integration (Days 5-6)**
 #### **Day 5: Data Pipeline**
 - [ ] **IoT Rules Engine**: Message routing, transformation, filtering
-- [ ] **TimeStream Integration**: Multi-measure records, efficient storage
+- [ ] **TimeStream for InfluxDB Integration**: Multi-measure records, efficient storage, InfluxDB protocols
 - [ ] **Lambda Functions**: Data validation, alert processing, transformation
 - [ ] **CloudWatch Integration**: Custom metrics, dashboards, alarm rules
 - [ ] **Security Policies**: Fine-grained IAM, resource-based policies
 
 #### **Day 6: Monitoring Setup**
-- [ ] **Grafana Data Sources**: TimeStream connection, CloudWatch integration
+- [ ] **AWS Managed Grafana Data Sources**: TimeStream for InfluxDB connection, CloudWatch integration
 - [ ] **Fleet Dashboard**: High-level vessel overview, system health heatmaps
 - [ ] **Vessel Dashboard**: Single vessel detailed view, system breakdowns
 - [ ] **System Dashboards**: Engine, power, navigation, safety detailed views
@@ -192,21 +193,22 @@ sequenceDiagram
 | **Service** | **Cost** | **Duration** | **Purpose** |
 |-------------|----------|--------------|-------------|
 | **AWS IoT Core** | $25 | 8 days | MQTT broker (reduced message rate) |
-| **TimeStream** | $0 | 8 days | Time-series storage (free tier) |
+| **TimeStream for InfluxDB** | $0 | 8 days | Time-series database (free tier) |
 | **Lambda** | $0 | 8 days | Data processing (free tier) |
+| **AWS Managed Grafana** | $0 | 8 days | Monitoring workspace (free tier) |
 | **Secrets Manager** | $0.32 | 8 days | Certificate storage (pro-rated) |
 | **CloudWatch** | $0 | 8 days | Monitoring (free tier) |
 | **S3** | $0 | 8 days | Storage (free tier) |
 | **HiveMQ Cloud** | $49 | Monthly | Professional MQTT broker |
 | **Fly.io** | $0.52 | 8 days | Simulator + control dashboard |
-| **Grafana Cloud** | $0 | 8 days | Fleet monitoring (free tier) |
 | **TOTAL** | **$74.84** | **8 days** | **Complete interactive demo** |
 
 ### **Cost Optimization Strategies**
 - **Message Rate**: 1/minute instead of 1/second reduces IoT Core costs 95%
 - **Free Tiers**: Maximize AWS free tier usage across all services
-- **Efficient Storage**: Multi-measure TimeStream records reduce storage costs
+- **Efficient Storage**: Multi-measure TimeStream for InfluxDB records reduce storage costs
 - **Minimal Compute**: Serverless Lambda stays within free tier limits
+- **Service-Managed Grafana**: No additional costs for AWS managed workspace
 
 ## 🎭 Interactive Demo Script
 
@@ -238,7 +240,7 @@ This is live data flowing through HiveMQ to AWS IoT Core to TimeStream to Grafan
 "Watch the right screen - you can see the RPM increase in real-time.
 Notice the fuel flow automatically increases from 120 to 180 liters per hour.
 Engine temperature is rising from 85°C to 92°C.
-This data is flowing: Fly.io → HiveMQ → AWS → Grafana in under 3 seconds."
+This data is flowing: Fly.io → HiveMQ → AWS IoT Core → TimeStream for InfluxDB → AWS Managed Grafana in under 3 seconds."
 
 "In November, this same pattern will work with the Damen Triton gateway."
 ```

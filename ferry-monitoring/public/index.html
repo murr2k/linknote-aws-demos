@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BC Ferries Operations Center - Maritime Monitoring Dashboard</title>
+    <meta name="description" content="Real-time maritime telemetry monitoring for BC Ferries Island Class vessels">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚢</text></svg>">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js for real-time charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* BC Ferries Brand Colors */
+            --bc-blue: #003f7f;
+            --bc-light-blue: #4a90e2;
+            --bc-green: #28a745;
+            --bc-yellow: #ffc107;
+            --bc-orange: #fd7e14;
+            --bc-red: #dc3545;
+            
+            /* Maritime Theme */
+            --ocean-blue: #006994;
+            --wave-blue: #0080b0;
+            --foam-white: #f8f9fa;
+            --deck-gray: #6c757d;
+            --steel-gray: #495057;
+            --emergency-red: #ff4757;
+            
+            /* UI Colors */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-dark: #1e2124;
+            --text-primary: #2c3e50;
+            --text-secondary: #6c757d;
+            --text-light: #ffffff;
+            --border-color: #dee2e6;
+            --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, var(--foam-white) 0%, #e3f2fd 100%);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--bc-blue) 0%, var(--ocean-blue) 100%);
+            color: var(--text-light);
+            padding: 1rem 0;
+            box-shadow: var(--shadow-lg);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-logo {
+            font-size: 2rem;
+            margin-right: 0.5rem;
+        }
+
+        .header-title h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .header-subtitle {
+            font-size: 0.875rem;
+            opacity: 0.9;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .system-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            font-size: 0.875rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--bc-green);
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.warning {
+            background: var(--bc-yellow);
+        }
+
+        .status-indicator.critical {
+            background: var(--emergency-red);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Main Content */
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        /* Alert Bar */
+        .alert-bar {
+            background: var(--emergency-red);
+            color: var(--text-light);
+            padding: 1rem 2rem;
+            text-align: center;
+            font-weight: 600;
+            display: none;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .alert-bar.show {
+            display: block;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-100%); }
+            to { transform: translateY(0); }
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .dashboard-card {
+            background: var(--bg-primary);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .card-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-content {
+            padding: 1.5rem;
+        }
+
+        /* Metrics Cards */
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .metric-card {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: var(--shadow);
+            border-left: 4px solid var(--bc-blue);
+            transition: all 0.3s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .metric-card.warning {
+            border-left-color: var(--bc-yellow);
+        }
+
+        .metric-card.critical {
+            border-left-color: var(--emergency-red);
+        }
+
+        .metric-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+            color: var(--bc-blue);
+        }
+
+        .metric-card.warning .metric-value {
+            color: var(--bc-orange);
+        }
+
+        .metric-card.critical .metric-value {
+            color: var(--emergency-red);
+        }
+
+        .metric-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .metric-change {
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            background: var(--bg-secondary);
+        }
+
+        /* Charts */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 1rem;
+        }
+
+        .chart-container.large {
+            height: 400px;
+        }
+
+        /* Vessel Status Table */
+        .vessel-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .vessel-table th,
+        .vessel-table td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .vessel-table th {
+            background: var(--bg-secondary);
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .vessel-table tr:hover {
+            background: var(--bg-secondary);
+        }
+
+        .vessel-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .vessel-status.active {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--bc-green);
+        }
+
+        .vessel-status.warning {
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--bc-orange);
+        }
+
+        .vessel-status.offline {
+            background: rgba(108, 117, 125, 0.1);
+            color: var(--deck-gray);
+        }
+
+        /* Grafana Integration */
+        .grafana-embed {
+            background: var(--bg-primary);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+
+        .grafana-embed iframe {
+            width: 100%;
+            height: 600px;
+            border: none;
+        }
+
+        /* Control Integration */
+        .control-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .control-button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            text-align: center;
+            display: inline-block;
+        }
+
+        .control-button.primary {
+            background: var(--bc-blue);
+            color: var(--text-light);
+        }
+
+        .control-button.primary:hover {
+            background: var(--ocean-blue);
+            transform: translateY(-1px);
+        }
+
+        .control-button.secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .control-button.secondary:hover {
+            background: var(--bg-primary);
+        }
+
+        /* Loading States */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--bg-secondary);
+            border-top: 3px solid var(--bc-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .main-container {
+                padding: 1rem;
+                gap: 1rem;
+            }
+
+            .metric-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-container {
+                height: 250px;
+            }
+
+            .vessel-table {
+                font-size: 0.875rem;
+            }
+
+            .control-panel {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-primary: #2c3e50;
+                --bg-secondary: #34495e;
+                --text-primary: #ecf0f1;
+                --text-secondary: #bdc3c7;
+                --border-color: #34495e;
+            }
+
+            body {
+                background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            }
+        }
+
+        /* Custom Maritime Elements */
+        .wave-divider {
+            height: 20px;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 20'%3E%3Cpath d='M0,10 Q250,0 500,10 T1000,10 L1000,20 L0,20 Z' fill='%23006994' opacity='0.1'/%3E%3C/svg%3E") repeat-x;
+            background-size: 1000px 20px;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Emergency Alert Bar -->
+    <div id="alertBar" class="alert-bar">
+        <span id="alertMessage">🚨 EMERGENCY: Fire alarm activated on Island Class Vessel 001</span>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="header-logo">🚢</div>
+                <div class="header-title">
+                    <h1>BC Ferries Operations Center</h1>
+                    <p class="header-subtitle">Maritime Telemetry Monitoring Dashboard - ops.linknote.com</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="system-status">
+                    <div id="systemStatusIndicator" class="status-indicator"></div>
+                    <span id="systemStatusText">System Operational</span>
+                </div>
+                <div class="system-status">
+                    <span id="lastUpdateTime">Last Update: --:--</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard -->
+    <main class="main-container">
+        <!-- Key Metrics Overview -->
+        <section class="metric-grid" id="keyMetrics">
+            <div class="metric-card" id="connectedVessels">
+                <span class="metric-icon">🚢</span>
+                <div class="metric-value" id="vesselCount">--</div>
+                <div class="metric-label">Connected Vessels</div>
+                <div class="metric-change" id="vesselChange">--</div>
+            </div>
+            
+            <div class="metric-card" id="criticalAlerts">
+                <span class="metric-icon">🚨</span>
+                <div class="metric-value" id="criticalCount">--</div>
+                <div class="metric-label">Critical Alerts</div>
+                <div class="metric-change" id="criticalChange">--</div>
+            </div>
+            
+            <div class="metric-card" id="warningAlerts">
+                <span class="metric-icon">⚠️</span>
+                <div class="metric-value" id="warningCount">--</div>
+                <div class="metric-label">Warning Alerts</div>
+                <div class="metric-change" id="warningChange">--</div>
+            </div>
+            
+            <div class="metric-card" id="systemHealth">
+                <span class="metric-icon">💚</span>
+                <div class="metric-value" id="healthScore">--</div>
+                <div class="metric-label">System Health</div>
+                <div class="metric-change" id="healthChange">--</div>
+            </div>
+        </section>
+
+        <!-- Wave Divider -->
+        <div class="wave-divider"></div>
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+            <!-- Real-time Vessel Monitoring -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        🚢 Active Vessel Monitoring
+                    </h2>
+                </div>
+                <div class="card-content">
+                    <table class="vessel-table" id="vesselTable">
+                        <thead>
+                            <tr>
+                                <th>Vessel ID</th>
+                                <th>Status</th>
+                                <th>Route</th>
+                                <th>Last Seen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vesselTableBody">
+                            <tr>
+                                <td colspan="4" class="loading">
+                                    <div class="spinner"></div>
+                                    Loading vessel data...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Engine Performance -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        🔧 Engine Performance
+                    </h2>
+                </div>
+                <div class="card-content">
+                    <div class="chart-container">
+                        <canvas id="engineChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Power Systems -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        ⚡ Power Systems
+                    </h2>
+                </div>
+                <div class="card-content">
+                    <div class="chart-container">
+                        <canvas id="powerChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Safety Systems -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        🛡️ Safety Systems
+                    </h2>
+                </div>
+                <div class="card-content">
+                    <div class="chart-container">
+                        <canvas id="safetyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Data -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        🧭 Navigation
+                    </h2>
+                </div>
+                <div class="card-content">
+                    <div class="chart-container">
+                        <canvas id="navigationChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Integration -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        🔗 System Integration
+                    </h2>
+                </div>
+                <div class="card-content">
+                    <div class="control-panel">
+                        <a href="https://ferry.linknote.com" class="control-button primary" target="_blank">
+                            🎛️ Ferry Control Dashboard
+                        </a>
+                        <a href="/grafana/d/ferry-monitoring" class="control-button primary" target="_blank">
+                            📊 Grafana Dashboard
+                        </a>
+                        <button class="control-button secondary" onclick="refreshData()">
+                            🔄 Refresh Data
+                        </button>
+                        <button class="control-button secondary" onclick="downloadReport()">
+                            📋 Download Report
+                        </button>
+                    </div>
+                    
+                    <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 6px; font-size: 0.875rem;">
+                        <strong>System Connections:</strong><br>
+                        Ferry Control: <span id="ferryControlStatus">🔴 Disconnected</span><br>
+                        MQTT Broker: <span id="mqttStatus">🔴 Disconnected</span><br>
+                        Grafana Cloud: <span id="grafanaStatus">🔴 Disconnected</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grafana Integration -->
+        <section class="grafana-embed">
+            <div class="card-header">
+                <h2 class="card-title">
+                    📈 Grafana Cloud Monitoring Dashboard
+                </h2>
+            </div>
+            <iframe 
+                id="grafanaFrame"
+                src="about:blank"
+                title="BC Ferries Grafana Monitoring Dashboard"
+                loading="lazy">
+            </iframe>
+        </section>
+    </main>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
