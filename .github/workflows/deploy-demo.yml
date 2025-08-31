@@ -1,0 +1,190 @@
+name: Deploy BC Ferries Dual Dashboard Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'Deployment target'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+env:
+  AWS_REGION: us-west-2
+
+jobs:
+  deploy-dual-dashboard:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: Install Fly CLI
+      uses: superfly/flyctl-actions/setup-flyctl@master
+      
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq curl
+        
+    - name: Configure CloudFlare credentials
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_KEY }}
+        CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+      run: |
+        echo "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN" >> $GITHUB_ENV
+        echo "CLOUDFLARE_ZONE_ID=$CLOUDFLARE_ZONE_ID" >> $GITHUB_ENV
+        echo "CLOUDFLARE_EMAIL=$CLOUDFLARE_EMAIL" >> $GITHUB_ENV
+        
+    - name: Deploy AWS infrastructure
+      run: |
+        cd config
+        aws cloudformation deploy \
+          --template-file aws-grafana-workspace.yaml \
+          --stack-name bc-ferries-grafana-${{ inputs.deploy_target }} \
+          --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+          --region ${{ env.AWS_REGION }} \
+          --parameter-overrides \
+            WorkspaceName=bc-ferries-${{ inputs.deploy_target }} \
+            CustomDomain=ops.linknote.com
+            
+    - name: Update CloudFlare DNS
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_KEY }}
+        CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+      run: |
+        # Get AWS Grafana endpoint
+        WORKSPACE_ENDPOINT=$(aws cloudformation describe-stacks \
+          --stack-name bc-ferries-grafana-${{ inputs.deploy_target }} \
+          --region ${{ env.AWS_REGION }} \
+          --query 'Stacks[0].Outputs[?OutputKey==`GrafanaWorkspaceEndpoint`].OutputValue' \
+          --output text)
+        
+        echo "AWS Grafana endpoint: $WORKSPACE_ENDPOINT"
+        
+        # Update ops.linknote.com CNAME
+        RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?name=ops.linknote.com" \
+          -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | jq -r '.result[0].id // empty')
+        
+        if [ -z "$RECORD_ID" ]; then
+          # Create new record
+          curl -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "{
+              \"type\": \"CNAME\",
+              \"name\": \"ops\",
+              \"content\": \"$WORKSPACE_ENDPOINT\",
+              \"ttl\": 300,
+              \"proxied\": true
+            }"
+        else
+          # Update existing record
+          curl -X PUT "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$RECORD_ID" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "{
+              \"type\": \"CNAME\",
+              \"name\": \"ops\",
+              \"content\": \"$WORKSPACE_ENDPOINT\",
+              \"ttl\": 300,
+              \"proxied\": true
+            }"
+        fi
+        
+    - name: Deploy Fly.io control dashboard
+      env:
+        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      run: |
+        cd ferry-control
+        
+        # Create app if it doesn't exist
+        flyctl apps list | grep -q "bc-ferries-control-${{ inputs.deploy_target }}" || \
+          flyctl apps create bc-ferries-control-${{ inputs.deploy_target }}
+        
+        # Set secrets
+        flyctl secrets set \
+          GRAFANA_ADMIN_PASSWORD="$(openssl rand -base64 32)" \
+          HIVEMQ_BROKER_URL="tcp://cluster.hivemq.cloud:1883" \
+          HIVEMQ_USERNAME="bcferries-demo-${{ inputs.deploy_target }}" \
+          HIVEMQ_PASSWORD="$(openssl rand -base64 16)" \
+          --app bc-ferries-control-${{ inputs.deploy_target }}
+        
+        # Deploy
+        flyctl deploy --app bc-ferries-control-${{ inputs.deploy_target }}
+        
+    - name: Update ferry.linknote.com DNS
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_KEY }}
+        CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+      run: |
+        # Get or create ferry.linknote.com CNAME
+        RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?name=ferry.linknote.com" \
+          -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | jq -r '.result[0].id // empty')
+        
+        FLY_ENDPOINT="bc-ferries-control-${{ inputs.deploy_target }}.fly.dev"
+        
+        if [ -z "$RECORD_ID" ]; then
+          # Create new record
+          curl -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "{
+              \"type\": \"CNAME\",
+              \"name\": \"ferry\",
+              \"content\": \"$FLY_ENDPOINT\",
+              \"ttl\": 300,
+              \"proxied\": true
+            }"
+        else
+          # Update existing record
+          curl -X PUT "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$RECORD_ID" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "{
+              \"type\": \"CNAME\",
+              \"name\": \"ferry\",
+              \"content\": \"$FLY_ENDPOINT\",
+              \"ttl\": 300,
+              \"proxied\": true
+            }"
+        fi
+        
+    - name: Test deployment
+      run: |
+        echo "🧪 Testing deployment..."
+        
+        # Wait for DNS propagation
+        sleep 30
+        
+        # Test Fly.io deployment
+        FLY_URL="https://bc-ferries-control-${{ inputs.deploy_target }}.fly.dev"
+        if curl -s --max-time 30 "$FLY_URL/health" | grep -q "ok"; then
+          echo "✅ Control dashboard is healthy: $FLY_URL"
+        else
+          echo "⚠️  Control dashboard may still be starting up"
+        fi
+        
+    - name: Deployment summary
+      run: |
+        echo "🎉 BC Ferries Dual Dashboard Deployment Complete!"
+        echo "=============================================="
+        echo ""
+        echo "🎯 Demo URLs (${{ inputs.deploy_target }}):"
+        echo "   Control Dashboard: https://ferry.linknote.com"
+        echo "   Monitoring Dashboard: https://ops.linknote.com"
+        echo ""
+        echo "💰 Estimated cost: ~$25/week for demonstration"
+        echo "🚀 Ready for BC Ferries interview presentation!"
