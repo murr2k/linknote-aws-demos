@@ -14,6 +14,43 @@ This repository contains the complete technical architecture and implementation 
 
 **Key Innovation**: Dual-screen interactive demo where you can control vessel systems in real-time and immediately see the response on AWS monitoring dashboards.
 
+## 📋 Repository Purpose & Coverage
+
+### **This Repository (`linknote-aws-demos`) - Enterprise Architecture**
+
+**Primary Focus**: Enterprise AWS integration with business case and interactive stakeholder demonstrations
+
+**Coverage:**
+- 🏢 **AWS Enterprise Integration** - CloudFormation templates, IoT Core, TimeStream, Managed Grafana
+- 💰 **Business Case & ROI** - Detailed cost analysis (`~$70/vessel/month`), production scaling projections
+- 🎭 **Interactive Demo System** - Dual-screen presentation setup for live stakeholder demonstrations
+- 📊 **Fleet Scalability** - Production architecture documentation for 50+ vessel deployment
+- 🏛️ **Public Sector Compliance** - Enterprise mTLS security, governance frameworks, audit trails
+- 📈 **Cost Optimization** - AWS resource optimization and budget management for public sector
+
+**Use Cases:**
+- Enterprise sales and business case presentations
+- AWS production infrastructure deployment
+- Stakeholder demonstrations with interactive controls
+- Fleet-wide scaling architecture and planning
+- Public sector compliance and security requirements
+
+### **Related Repository: `murr2k/aws-test` - Working Implementation**
+
+**Primary Focus**: Live MQTT/WebSocket maritime monitoring system with deployed services
+
+**Coverage:**
+- ✅ **Working Services** - Ferry control, ops dashboard, MQTT broker deployed on Fly.io
+- ✅ **MQTT WebSocket with TLS** - Browser-compatible secure connections
+- ✅ **Development Infrastructure** - Claude Flow AI workflows, rapid prototyping
+- ✅ **Live Deployments** - Operational services for testing and development
+
+**Repository Relationship:**
+- **`linknote-aws-demos`** → Enterprise architecture and business case (this repository)
+- **`aws-test`** → Working implementation platform
+
+Both repositories serve **complementary purposes** in the comprehensive BC Ferries maritime telemetry ecosystem.
+
 ## 🚢 BC Ferries Context
 
 - **Vessels**: Island Class hybrid-electric ferries (80.8m, 47 vehicles, 392 passengers)
