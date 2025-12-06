@@ -1442,3 +1442,156 @@ canvas {
 .btn-close i {
   font-size: var(--font-size-lg);
 }
+
+/* Markdown Content Styles */
+.markdown-content {
+  padding: var(--spacing-xl);
+  color: var(--white);
+  line-height: 1.7;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.markdown-content h1 {
+  font-size: 2rem;
+  color: var(--blue-accent);
+  border-bottom: 2px solid var(--blue-primary);
+  padding-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.markdown-content h2 {
+  font-size: 1.5rem;
+  color: var(--blue-light);
+  margin-top: var(--spacing-xl);
+  margin-bottom: var(--spacing-md);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding-bottom: var(--spacing-sm);
+}
+
+.markdown-content h3 {
+  font-size: 1.25rem;
+  color: var(--white);
+  margin-top: var(--spacing-lg);
+  margin-bottom: var(--spacing-sm);
+}
+
+.markdown-content p {
+  margin-bottom: var(--spacing-md);
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--spacing-lg) 0;
+  font-size: var(--font-size-sm);
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+}
+
+.markdown-content th {
+  background: var(--blue-primary);
+  color: var(--white);
+  font-weight: 600;
+}
+
+.markdown-content tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.markdown-content code {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: var(--blue-accent);
+}
+
+.markdown-content pre {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md);
+  overflow-x: auto;
+  margin: var(--spacing-md) 0;
+}
+
+.markdown-content pre code {
+  background: none;
+  padding: 0;
+  color: var(--light-gray);
+}
+
+.markdown-content blockquote {
+  border-left: 4px solid var(--blue-primary);
+  padding-left: var(--spacing-md);
+  margin: var(--spacing-md) 0;
+  color: var(--medium-gray);
+  font-style: italic;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: var(--spacing-md) 0;
+  padding-left: var(--spacing-xl);
+}
+
+.markdown-content li {
+  margin-bottom: var(--spacing-xs);
+}
+
+.markdown-content strong {
+  color: var(--blue-accent);
+}
+
+/* Mermaid Diagram Styles */
+.markdown-content .mermaid {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-lg);
+  margin: var(--spacing-lg) 0;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.markdown-content .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Loading and Error States */
+.loading-docs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--medium-gray);
+}
+
+.loading-docs i {
+  font-size: 3rem;
+  color: var(--blue-accent);
+  margin-bottom: var(--spacing-lg);
+}
+
+.error-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--red-critical);
+  text-align: center;
+}
+
+.error-message i {
+  font-size: 3rem;
+  margin-bottom: var(--spacing-lg);
+}
