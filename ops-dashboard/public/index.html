@@ -432,18 +432,20 @@
 
                 const markdown = await response.text();
 
-                // Custom renderer to handle mermaid code blocks
-                const renderer = new marked.Renderer();
-                renderer.code = function(code, language) {
-                    if (language === 'mermaid') {
-                        return '<pre class="mermaid">' + code + '</pre>';
+                // Custom renderer to handle mermaid code blocks (marked v5+ API)
+                const renderer = {
+                    code(token) {
+                        const code = token.text || '';
+                        const lang = token.lang || '';
+                        if (lang === 'mermaid') {
+                            return '<pre class="mermaid">' + code + '</pre>';
+                        }
+                        const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        return '<pre><code class="language-' + lang + '">' + escaped + '</code></pre>';
                     }
-                    return '<pre><code class="language-' + language + '">' +
-                           code.replace(/</g, '&lt;').replace(/>/g, '&gt;') +
-                           '</code></pre>';
                 };
 
-                marked.setOptions({ renderer: renderer });
+                marked.use({ renderer: renderer });
                 content.innerHTML = '<div class="markdown-content">' + marked.parse(markdown) + '</div>';
 
                 // Render all mermaid diagrams
