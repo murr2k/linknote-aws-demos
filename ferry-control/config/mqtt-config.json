@@ -1,10 +1,10 @@
 {
   "hivemq": {
     "broker": {
-      "url": "HIVEMQ_CLUSTER_URL",
-      "port": 8883,
-      "protocol": "mqtts",
-      "secure": true
+      "url": "bc-ferries-mqtt-broker.internal",
+      "port": 1883,
+      "protocol": "mqtt",
+      "secure": false
     },
     "authentication": {
       "username": "HIVEMQ_USERNAME",
@@ -16,8 +16,8 @@
       "clean": true,
       "reconnectPeriod": 5000,
       "connectTimeout": 30000,
-      "rejectUnauthorized": true,
-      "protocolVersion": 5,
+      "rejectUnauthorized": false,
+      "protocolVersion": 4,
       "will": {
         "topic": "fleet/bcferries/status/disconnect",
         "payload": "Ferry control system disconnected",

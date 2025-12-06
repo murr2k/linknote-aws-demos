@@ -112,10 +112,17 @@ class MQTTClient {
     this.client.on('reconnect', () => {
       this.reconnectAttempts++;
       console.log(`🔄 Reconnecting to MQTT broker (attempt ${this.reconnectAttempts})`);
-      
+
       if (this.reconnectAttempts > this.maxReconnectAttempts) {
-        console.error('❌ Max reconnection attempts reached. Stopping reconnection.');
+        console.error('❌ Max reconnection attempts reached. Will retry with fresh connection in 60 seconds.');
         this.client.end(true);
+
+        // Schedule a full reconnection after a longer delay
+        setTimeout(() => {
+          console.log('🔄 Attempting fresh MQTT connection...');
+          this.reconnectAttempts = 0;
+          this.setupClient();
+        }, 60000);
       }
     });
 
@@ -246,16 +253,25 @@ class MQTTClient {
       };
 
       if (!this.isConnected) {
-        // Buffer message for later delivery
+        // Buffer message for later delivery, but limit buffer size to prevent memory exhaustion
+        const MAX_BUFFER_SIZE = 1000;
+
+        if (this.messageBuffer.size >= MAX_BUFFER_SIZE) {
+          // Remove oldest messages when buffer is full
+          const oldestKey = this.messageBuffer.keys().next().value;
+          this.messageBuffer.delete(oldestKey);
+          console.log(`⚠️ Buffer full, dropping oldest message. Size: ${this.messageBuffer.size}`);
+        }
+
         const bufferedMessage = {
           topic,
           message: messageStr,
           options: publishOptions,
           timestamp: Date.now()
         };
-        
+
         this.messageBuffer.set(uuidv4(), bufferedMessage);
-        console.log(`📦 Message buffered (not connected): ${topic}`);
+        console.log(`📦 Message buffered (not connected): ${topic} [${this.messageBuffer.size}/${MAX_BUFFER_SIZE}]`);
         resolve({ buffered: true });
         return;
       }

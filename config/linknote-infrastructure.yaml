@@ -6,12 +6,17 @@ Parameters:
     Type: String
     Default: 'linknote.com'
     Description: 'Primary domain name'
-  
+
   WWWDomainName:
     Type: String
     Default: 'www.linknote.com'
     Description: 'WWW subdomain'
-  
+
+  AWSSubdomainName:
+    Type: String
+    Default: 'aws.linknode.com'
+    Description: 'AWS subdomain for portfolio demo'
+
   CloudfrontPriceClass:
     Type: String
     Default: 'PriceClass_100'
@@ -113,11 +118,14 @@ Resources:
       DomainName: !Ref DomainName
       SubjectAlternativeNames:
         - !Ref WWWDomainName
+        - !Ref AWSSubdomainName
       ValidationMethod: 'DNS'
       DomainValidationOptions:
         - DomainName: !Ref DomainName
           HostedZoneId: !Ref 'AWS::NoValue'  # Must be validated manually via DNS
         - DomainName: !Ref WWWDomainName
+          HostedZoneId: !Ref 'AWS::NoValue'  # Must be validated manually via DNS
+        - DomainName: !Ref AWSSubdomainName
           HostedZoneId: !Ref 'AWS::NoValue'  # Must be validated manually via DNS
       Tags:
         - Key: 'Purpose'
@@ -133,6 +141,7 @@ Resources:
         Aliases:
           - !Ref DomainName
           - !Ref WWWDomainName
+          - !Ref AWSSubdomainName
         DefaultCacheBehavior:
           TargetOriginId: !Sub '${DomainName}-s3-origin'
           ViewerProtocolPolicy: 'redirect-to-https'
@@ -342,6 +351,12 @@ Outputs:
     Value: !Sub 'https://${WWWDomainName}'
     Export:
       Name: !Sub '${AWS::StackName}-WWWWebsiteURL'
+
+  AWSSubdomainURL:
+    Description: 'AWS subdomain URL'
+    Value: !Sub 'https://${AWSSubdomainName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-AWSSubdomainURL'
 
   S3BucketName:
     Description: 'Name of the S3 bucket'
